@@ -1,0 +1,28 @@
+# Local credentials and environment files
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local database and application state
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# Python
+**/venv/
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+
+# Node / Next.js
+**/node_modules/
+**/.next/
+**/out/
+**/tsconfig.tsbuildinfo
+
+# OS / editor files
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+@import '@xyflow/react/dist/style.css';
+
+:root {
+  --background: #060913;
+  --foreground: #e2e8f0;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom dark scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090e1c;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Enterprise AG Grid custom dark styling */
+.ag-theme-alpine-dark {
+  --ag-background-color: #0c1222;
+  --ag-header-background-color: #080d19;
+  --ag-odd-row-background-color: #0e1528;
+  --ag-row-hover-color: #17223b;
+  --ag-selected-row-background-color: #162a4a;
+  --ag-border-color: #1a253c;
+  --ag-header-foreground-color: #94a3b8;
+  --ag-foreground-color: #e2e8f0;
+  --ag-font-size: 13px;
+  --ag-font-family: inherit;
+  --ag-grid-size: 6px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ag-theme-alpine-dark .ag-cell {
+  line-height: normal;
+  overflow: hidden;
+}
+
+.ag-theme-alpine-dark .ag-cell-wrapper,
+.ag-theme-alpine-dark .ag-cell-value {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* React Flow custom dark background and controls */
+.react-flow__attribution {
+  display: none !important;
+}
+.react-flow__handle {
+  background: #38bdf8 !important;
+  width: 8px !important;
+  height: 8px !important;
+}
