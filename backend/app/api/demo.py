@@ -1,10 +1,11 @@
 import uuid
 from typing import Dict, Any
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.config import settings
+from app.security.auth import verify_mutation_auth
 from app.services.seed_service import SeedService
 from app.models.models import Transaction, AuditLog, PaymentOperation
 from app.fraud.risk_engine import DeterministicRiskEngine
@@ -43,7 +44,10 @@ def get_demo_status():
     }
 
 @router.post("/seed")
-def seed_demo(db: Session = Depends(get_db)):
+def seed_demo(
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     svc = SeedService(db)
     svc.clear_database()
     count = svc.seed_demo_dataset()
@@ -67,7 +71,10 @@ def seed_demo(db: Session = Depends(get_db)):
     }
 
 @router.post("/reset")
-def reset_demo(db: Session = Depends(get_db)):
+def reset_demo(
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     svc = SeedService(db)
     svc.clear_database()
 
@@ -89,7 +96,10 @@ def reset_demo(db: Session = Depends(get_db)):
     }
 
 @router.post("/simulate-transaction")
-def simulate_legitimate_transaction(db: Session = Depends(get_db)):
+def simulate_legitimate_transaction(
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     tx_id = f"TXN_SIM_{uuid.uuid4().hex[:6].upper()}"
     new_txn = Transaction(
         id=tx_id,
@@ -130,7 +140,10 @@ def simulate_legitimate_transaction(db: Session = Depends(get_db)):
     }
 
 @router.post("/trigger-suspicious")
-def trigger_suspicious_activity(db: Session = Depends(get_db)):
+def trigger_suspicious_activity(
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     """
     Triggers a rapid velocity and credential-sharing attack vector on Marcus Sterling (ACC_009).
     Uses stable identifiers and idempotency to prevent duplicate cases and transactions.
@@ -230,7 +243,10 @@ def trigger_suspicious_activity(db: Session = Depends(get_db)):
     }
 
 @router.post("/run-investigation")
-def trigger_full_investigation_run(db: Session = Depends(get_db)):
+def trigger_full_investigation_run(
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     """
     Finds the primary fraud syndicate transaction (TXN_FRAUD_901) and runs full multi-agent investigation.
     Executes idempotently without creating duplicate cases or financial operations.

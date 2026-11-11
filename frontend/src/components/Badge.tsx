@@ -71,6 +71,21 @@ export function Badge({ type, value }: BadgeProps) {
             {val}
           </span>
         );
+      case 'CREATED':
+        return (
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-violet-500/15 text-violet-300 border border-violet-500/30"
+            title="PayPal order created — awaiting buyer approval before capture"
+          >
+            CREATED · Awaiting Buyer
+          </span>
+        );
+      case 'UNCAPTURED':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+            UNCAPTURED
+          </span>
+        );
       case 'FAILED':
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30">

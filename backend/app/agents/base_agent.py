@@ -75,7 +75,7 @@ class BaseAgent:
         t0 = time.time()
         
         try:
-            output = self.run(inputs)
+            output = self._remove_uncalibrated_confidence(self.run(inputs))
             duration_ms = round((time.time() - t0) * 1000, 2)
             
             # Label provider mode
@@ -90,7 +90,6 @@ class BaseAgent:
                 "completed_at": utcnow().isoformat(),
                 "duration_ms": duration_ms,
                 "provider_mode": provider_label,
-                "confidence_score": output.get("confidence_score", 0.95),
                 "summary": output.get("summary", ""),
                 "findings": output.get("findings", {}),
                 "output_json": output,
@@ -105,12 +104,24 @@ class BaseAgent:
                 "completed_at": utcnow().isoformat(),
                 "duration_ms": round((time.time() - t0) * 1000, 2),
                 "provider_mode": "ERROR",
-                "confidence_score": 0.0,
                 "summary": f"Execution error in {self.name}: {str(e)}",
                 "findings": {},
                 "output_json": {},
                 "error": str(e)
             }
+
+    @classmethod
+    def _remove_uncalibrated_confidence(cls, value: Any) -> Any:
+        """Avoid persisting model-self-reported or hard-coded confidence as calibrated evidence."""
+        if isinstance(value, dict):
+            return {
+                key: cls._remove_uncalibrated_confidence(item)
+                for key, item in value.items()
+                if key.lower() not in {"confidence", "confidence_score"}
+            }
+        if isinstance(value, list):
+            return [cls._remove_uncalibrated_confidence(item) for item in value]
+        return value
 
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         raise NotImplementedError

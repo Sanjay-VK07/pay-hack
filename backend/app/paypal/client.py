@@ -6,7 +6,7 @@ from app.paypal.auth import PayPalAuth
 class PayPalClient:
     def __init__(self):
         self.auth = PayPalAuth()
-        self.base_url = settings.PAYPAL_BASE_URL.rstrip('/')
+        self.base_url = settings.validated_paypal_base_url
 
     def _get_headers(self, idempotency_key: Optional[str] = None) -> Tuple[Optional[Dict[str, str]], Optional[str]]:
         token, err = self.auth.get_access_token()
@@ -34,7 +34,14 @@ class PayPalClient:
                 return resp.json(), None
             try:
                 err_data = resp.json()
-                msg = f"PayPal GET error {resp.status_code}: {err_data.get('name', '')} - {err_data.get('message', '')} (Debug ID: {err_data.get('debug_id', 'N/A')})"
+                details_list = err_data.get("details", [])
+                details_str = ""
+                if details_list and isinstance(details_list, list):
+                    details_str = " - Details: " + "; ".join(
+                        f"{d.get('issue', '')}: {d.get('description', '')}"
+                        for d in details_list if isinstance(d, dict)
+                    )
+                msg = f"PayPal GET error {resp.status_code}: {err_data.get('name', '')} - {err_data.get('message', '')}{details_str} (Debug ID: {err_data.get('debug_id', 'N/A')})"
             except Exception:
                 msg = f"PayPal GET error {resp.status_code}: {resp.text}"
             return None, msg
@@ -53,7 +60,14 @@ class PayPalClient:
                 return resp.json(), None
             try:
                 err_data = resp.json()
-                msg = f"PayPal POST error {resp.status_code}: {err_data.get('name', '')} - {err_data.get('message', '')} (Debug ID: {err_data.get('debug_id', 'N/A')})"
+                details_list = err_data.get("details", [])
+                details_str = ""
+                if details_list and isinstance(details_list, list):
+                    details_str = " - Details: " + "; ".join(
+                        f"{d.get('issue', '')}: {d.get('description', '')}"
+                        for d in details_list if isinstance(d, dict)
+                    )
+                msg = f"PayPal POST error {resp.status_code}: {err_data.get('name', '')} - {err_data.get('message', '')}{details_str} (Debug ID: {err_data.get('debug_id', 'N/A')})"
             except Exception:
                 msg = f"PayPal POST error {resp.status_code}: {resp.text}"
             return None, msg

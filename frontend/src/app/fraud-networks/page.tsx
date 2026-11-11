@@ -120,9 +120,9 @@ function CustomEntityNode({ data, selected }: { data: any; selected?: boolean })
       </div>
 
       <div className="mt-2.5 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
-        <span className="text-slate-400">Risk Score:</span>
+        <span className="text-slate-400">{data.risk_score != null ? 'Risk Score:' : 'Stored Risk Label:'}</span>
         <span className={`font-mono font-bold ${isCritical ? 'text-rose-400' : 'text-emerald-400'}`}>
-          {data.risk_score !== undefined ? `${Number(data.risk_score).toFixed(0)}/100` : '—'}
+          {data.risk_score != null ? `${Number(data.risk_score).toFixed(0)}/100` : (data.risk_level || 'UNASSESSED')}
         </span>
       </div>
 
@@ -196,10 +196,8 @@ function FraudNetworkFlow() {
             evidence_id: e.evidence_id,
             is_suspicious: isSusp,
             suspicious_reason: e.suspicious_reason || '',
-            confidence: e.confidence ?? 0.85,
-            risk_contribution: e.risk_contribution ?? (isSusp ? '+25.0 (Corroborated)' : '0.0 (Baseline)'),
-            supporting_evidence: e.supporting_evidence || e.suspicious_reason || 'Verified relational database foreign key link.',
-            alternative_explanation: e.alternative_explanation || 'Benign infrastructure pooling or multi-user environment.',
+            supporting_evidence: e.supporting_evidence || e.suspicious_reason || 'No supporting evidence description is stored for this link.',
+            alternative_explanation: e.alternative_explanation || '',
             timestamp: e.timestamp,
             shared_indicator: e.shared_indicator,
           },
@@ -477,11 +475,11 @@ function FraudNetworkFlow() {
                   {activeCluster.name} Discovered by NetworkX
                 </span>
                 <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 font-mono font-bold">
-                  Risk: {activeCluster.risk_score}/100 ({activeCluster.risk_level})
+                  Highest transaction heuristic: {Number(activeCluster.risk_score || 0).toFixed(0)}/100
                 </span>
               </div>
               <p className="text-rose-200/90 leading-relaxed">
-                NetworkX graph traversal confirmed <strong>{activeCluster.member_accounts_count} accounts</strong> linked with <strong>{activeCluster.member_transactions_count} transactions</strong> (${activeCluster.total_transaction_value?.toFixed(2)} total value, ${activeCluster.suspicious_financial_exposure?.toFixed(2)} suspicious exposure) sharing <strong>{activeCluster.shared_devices_count} device collision(s)</strong> and <strong>{activeCluster.shared_identities_count} shared payment identity token(s)</strong>.
+                Local graph traversal found stored links across <strong>{activeCluster.member_accounts_count} accounts</strong> and <strong>{activeCluster.member_transactions_count} transactions</strong> (${activeCluster.total_transaction_value?.toFixed(2)} total value). Transactions flagged by local rules account for ${activeCluster.suspicious_financial_exposure?.toFixed(2)} of that recorded value. The group includes <strong>{activeCluster.shared_devices_count} shared device record(s)</strong> and <strong>{activeCluster.shared_identities_count} shared payment identity record(s)</strong>; these links are review signals, not proof of fraud.
               </p>
             </div>
           </div>
@@ -604,7 +602,7 @@ function FraudNetworkFlow() {
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                       selectedEdge.is_suspicious ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-blue-500/10 text-blue-300'
                     }`}>
-                      {selectedEdge.is_suspicious ? 'SUSPICIOUS LINK' : 'LEGITIMATE LINK'}
+                      {selectedEdge.is_suspicious ? 'LOCAL RULE MATCH' : 'NO LOCAL RULE MATCH'}
                     </span>
                   </div>
 
@@ -633,20 +631,6 @@ function FraudNetworkFlow() {
                         <span className="text-amber-300 font-mono">{selectedEdge.shared_indicator}</span>
                       </div>
                     )}
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400">Connection Strength:</span>
-                      <span className="text-emerald-400 font-mono font-bold">
-                        {`${(Number(selectedEdge.confidence || 0.85) * 100).toFixed(0)}%`}
-                      </span>
-                    </div>
-                    {selectedEdge.risk_contribution && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-400">Risk Contribution:</span>
-                        <span className="text-rose-400 font-mono font-bold">
-                          {selectedEdge.risk_contribution}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -656,7 +640,7 @@ function FraudNetworkFlow() {
                     Supporting Evidence:
                   </span>
                   <p className="text-slate-300 leading-relaxed text-xs">
-                    {selectedEdge.supporting_evidence || selectedEdge.suspicious_reason || 'Verified transactional or hardware association in relational database.'}
+                    {selectedEdge.supporting_evidence || selectedEdge.suspicious_reason || 'No supporting evidence description is stored for this link.'}
                   </p>
                 </div>
 
@@ -688,8 +672,8 @@ function FraudNetworkFlow() {
                     {selectedNode.label}
                   </h4>
                   <div className="flex justify-between text-slate-400 pt-1 border-t border-slate-850">
-                    <span>Risk Score:</span>
-                    <span className="font-mono font-bold text-cyan-400">{Number(selectedNode.risk_score || 0).toFixed(1)}/100</span>
+                    <span>{selectedNode.risk_score != null ? 'Risk Score:' : 'Stored Risk Label:'}</span>
+                    <span className="font-mono font-bold text-cyan-400">{selectedNode.risk_score != null ? `${Number(selectedNode.risk_score).toFixed(1)}/100` : (selectedNode.risk_level || 'UNASSESSED')}</span>
                   </div>
                   {selectedNode.cluster_id && (
                     <div className="flex justify-between text-slate-400">

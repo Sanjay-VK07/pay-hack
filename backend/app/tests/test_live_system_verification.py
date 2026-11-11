@@ -47,7 +47,7 @@ def test_safe_payment_mapping_and_case_905_integrity():
         assert data["paypal_verification"]["eligible_for_refund"] is False
         assert data["paypal_verification"]["captured_amount"] == 0.0
         assert data["paypal_verification"]["refundable_balance"] == 0.0
-        assert data["paypal_verification"]["seller_protection"] == "INELIGIBLE_NO_CAPTURE"
+        assert data["paypal_verification"]["seller_protection"] == "NOT_CHECKED_NO_CAPTURE"
 
         # Verify Payment Operations list endpoint
         payments_resp = client.get("/api/payments")
@@ -65,7 +65,7 @@ def test_safe_fraud_network_topology_and_spacing():
     Verify Issue 2:
     - NetworkX graph generates valid topological nodes and edges.
     - Node spacing enforces collision separation.
-    - All edges preserve evidence IDs, confidence, and supporting evidence.
+    - All edges preserve evidence IDs and stored supporting evidence without invented confidence values.
     """
     with TestClient(app) as client:
         resp = client.get("/api/fraud-networks")
@@ -88,8 +88,8 @@ def test_safe_fraud_network_topology_and_spacing():
         # Verify edge intelligence
         for edge in graph["edges"]:
             assert "relationship" in edge
-            assert "confidence" in edge
-            assert "risk_contribution" in edge
+            assert "confidence" not in edge
+            assert "risk_contribution" not in edge
             assert "supporting_evidence" in edge
 
 

@@ -13,12 +13,14 @@ import {
   Database,
   Lock,
   Server,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
 
 export default function SettingsPage() {
   const [status, setStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     setLoading(true);
@@ -27,6 +29,7 @@ export default function SettingsPage() {
       setStatus(data);
     } catch (err) {
       console.error('Failed to load settings status:', err);
+      setLoadError('Could not reach the local API. Integration status is unavailable.');
     } finally {
       setLoading(false);
     }
@@ -46,7 +49,7 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <span>System Settings & Integrations</span>
             <span className="text-xs font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-              Enterprise Configuration
+              Local Demo Configuration
             </span>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
@@ -61,6 +64,7 @@ export default function SettingsPage() {
           </div>
         ) : (
           <div className="space-y-6">
+            {loadError && <div role="alert" className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-sm text-rose-200">{loadError}</div>}
             {/* AI Providers Card */}
             <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
               <div className="flex items-center space-x-3">
@@ -87,7 +91,7 @@ export default function SettingsPage() {
                   <div className="flex items-center space-x-2">
                     <span className={`h-2 w-2 rounded-full ${status?.has_gemini ? 'bg-emerald-400' : 'bg-slate-600'}`} />
                     <span className="text-xs font-mono font-bold text-white">
-                      {status?.has_gemini ? 'CONFIGURED & CONNECTED' : 'UNSET (FALLBACK ACTIVE)'}
+                      {status?.has_gemini ? 'KEY CONFIGURED • NOT PROBED' : 'NOT CONFIGURED'}
                     </span>
                   </div>
                 </div>
@@ -97,7 +101,7 @@ export default function SettingsPage() {
                   <div className="flex items-center space-x-2">
                     <span className={`h-2 w-2 rounded-full ${status?.has_openai ? 'bg-emerald-400' : 'bg-slate-600'}`} />
                     <span className="text-xs font-mono font-bold text-white">
-                      {status?.has_openai ? 'CONFIGURED & CONNECTED' : 'UNSET (FALLBACK ACTIVE)'}
+                      {status?.has_openai ? 'KEY CONFIGURED • NOT PROBED' : 'NOT CONFIGURED'}
                     </span>
                   </div>
                 </div>
@@ -107,7 +111,7 @@ export default function SettingsPage() {
                   <div className="flex items-center space-x-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-400" />
                     <span className="text-xs font-mono font-bold text-emerald-400">
-                      ACTIVE & GUARANTEED
+                      ACTIVE
                     </span>
                   </div>
                 </div>
@@ -123,19 +127,32 @@ export default function SettingsPage() {
                 <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <h3 className="text-base font-bold text-white">PayPal Sandbox Gateway</h3>
-                    <p className="text-xs text-slate-400">OAuth 2.0, REST API Orders v2, Captures v2, and Idempotent Refunds</p>
+                    <p className="text-xs text-slate-400">OAuth 2.0 Client Credentials Grant & REST API V2 Integrations</p>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <span className="text-[11px] text-slate-400 font-mono">Gateway Mode:</span>
+                    <span className="text-[11px] text-slate-400 font-mono">OAuth 2.0 Status:</span>
                     <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${
-                      status?.integration_mode === 'LIVE_PAYPAL_SANDBOX'
+                      status?.paypal_oauth_status === 'AUTHENTICATED'
                         ? 'bg-emerald-950/80 border-emerald-800 text-emerald-300'
-                        : 'bg-indigo-950/80 border-indigo-800 text-indigo-300'
+                        : status?.paypal_oauth_status === 'FAILED'
+                          ? 'bg-rose-950/80 border-rose-800 text-rose-300'
+                          : 'bg-slate-900 border-slate-700 text-slate-300'
                     }`}>
-                      {status?.integration_mode || 'SIMULATED_SANDBOX'}
+                      {status?.paypal_oauth_status === 'AUTHENTICATED' ? 'OAUTH AUTHENTICATED' : (status?.paypal_oauth_status || 'STATUS UNKNOWN')}
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Status Notice Banner distinguishing OAuth from Settlement execution */}
+              <div className="p-3.5 rounded-lg bg-blue-950/40 border border-blue-800/60 text-xs text-blue-200/90 space-y-1">
+                <div className="flex items-center space-x-2 font-semibold text-white">
+                  <Info className="h-4 w-4 text-cyan-400 flex-shrink-0" />
+                  <span>Integration Status & Demo Dataset Notice</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed text-[11px]">
+                  PayPal Sandbox OAuth status is <strong>{status?.paypal_oauth_status || 'unknown'}</strong>; connectivity is <strong>{status?.paypal_connectivity || 'unknown'}</strong>. Live order creation was verified against Sandbox (<code className="text-cyan-300 font-mono">CREATED · Awaiting Buyer</code>). Buyer approval, capture, and refund are unperformed and unverified. Pre-seeded demo records are local simulations (<code className="text-amber-300 font-mono">SIMULATED SANDBOX</code>).
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 text-xs">
@@ -144,7 +161,7 @@ export default function SettingsPage() {
                   <div className="flex items-center space-x-2">
                     <span className={`h-2 w-2 rounded-full ${status?.paypal_credentials_status === 'CONFIGURED' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                     <span className="font-mono font-bold text-white">
-                      {status?.paypal_credentials_status === 'CONFIGURED' ? 'CONFIGURED' : 'MISSING (ENV UNSET)'}
+                      {status?.paypal_credentials_status || 'UNKNOWN'}
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-400 block font-mono">
@@ -171,10 +188,10 @@ export default function SettingsPage() {
                   <span className="text-slate-400 block font-medium">Sandbox Connectivity</span>
                   <div className="flex items-center space-x-2">
                     <span className={`h-2 w-2 rounded-full ${
-                      status?.paypal_connectivity === 'REACHABLE' ? 'bg-emerald-400' : 'bg-cyan-400'
+                      status?.paypal_connectivity === 'REACHABLE' ? 'bg-emerald-400' : (status?.paypal_connectivity === 'UNREACHABLE' ? 'bg-rose-400' : 'bg-slate-600')
                     }`} />
                     <span className="font-mono font-bold text-white">
-                      {status?.paypal_connectivity === 'REACHABLE' ? 'REACHABLE' : 'SIMULATION FALLBACK'}
+                      {status?.paypal_connectivity || 'UNKNOWN'}
                     </span>
                   </div>
                   <span className="text-[11px] text-cyan-400 block font-mono truncate" title={status?.paypal_base_url}>
@@ -183,15 +200,15 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-2">
-                  <span className="text-slate-400 block font-medium">Last Live API Verification</span>
+                  <span className="text-slate-400 block font-medium">Last OAuth Token Probe</span>
                   <div className="flex items-center space-x-2">
                     <span className={`h-2 w-2 rounded-full ${status?.last_api_verification ? 'bg-emerald-400' : 'bg-slate-600'}`} />
                     <span className="font-mono font-bold text-slate-200 text-[11px] truncate" title={status?.last_api_verification || 'None'}>
-                      {status?.last_api_verification ? new Date(status.last_api_verification).toLocaleTimeString() : 'None (Simulation Active)'}
+                      {status?.last_api_verification ? new Date(status.last_api_verification).toLocaleTimeString() : 'None'}
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-400 block">
-                    {status?.last_api_verification ? 'Live Sandbox verified' : 'No live call made'}
+                    {status?.last_api_verification ? 'OAuth probe verified' : 'No live probe made'}
                   </span>
                 </div>
               </div>
@@ -204,20 +221,20 @@ export default function SettingsPage() {
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Enterprise Security & Secrets Masking</h3>
+                  <h3 className="text-base font-bold text-white">Local Demo Security Notes</h3>
                   <p className="text-xs text-slate-400">All credentials isolated in backend environment variables</p>
                 </div>
               </div>
 
               <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2 leading-relaxed">
                 <p>
-                  ✓ Secret keys, API tokens, and webhook HMAC credentials are never rendered or transmitted to client browser bundles.
+                  ✓ Secret values are not displayed in this status screen. Keep credentials in backend environment variables and out of source control.
                 </p>
                 <p>
-                  ✓ Deterministic risk engine calculates unalterable factual scores to prevent hallucination in financial decisions.
+                  ✓ The deterministic rules calculate the risk score. Optional AI summaries may explain evidence but do not make the payment decision.
                 </p>
                 <p>
-                  ✓ Human-in-the-Loop approval gate strictly enforces authorized signatures before any payment reversal can dispatch.
+                  ✓ Human-in-the-Loop approval gate requires explicit human review and a named decision-maker before any payment reversal can be queued. API endpoints are loopback-only; caller identity is not independently authenticated in this demo.
                 </p>
               </div>
             </div>

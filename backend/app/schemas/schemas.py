@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 # Base & Shared
 class IndicatorSchema(BaseModel):
@@ -102,7 +102,7 @@ class GraphNode(BaseModel):
     id: str
     label: str
     type: str  # ACCOUNT, TRANSACTION, DEVICE, PAYMENT_IDENTITY, IP_INDICATOR
-    risk_score: float = 0.0
+    risk_score: Optional[float] = None
     risk_level: str = "LOW"
     cluster_id: Optional[str] = None
     position: Dict[str, float] = {}
@@ -118,8 +118,6 @@ class GraphEdge(BaseModel):
     evidence_id: Optional[str] = None
     is_suspicious: bool = False
     suspicious_reason: Optional[str] = None
-    confidence: Optional[float] = 0.85
-    risk_contribution: Optional[str] = None
     supporting_evidence: Optional[str] = None
     alternative_explanation: Optional[str] = None
     timestamp: Optional[str] = None
@@ -145,11 +143,11 @@ class EvidenceSchema(BaseModel):
     observed_value: Optional[str] = None
     baseline_value: Optional[str] = None
     severity: str = "MEDIUM"
-    confidence_score: float = 0.95
-    source_reliability: str = "HIGH - Verified Hardware / Network Telemetry"
-    corroboration_count: int = 1
+    confidence_score: Optional[float] = None
+    source_reliability: Optional[str] = None
+    corroboration_count: Optional[int] = None
     alternative_explanation: Optional[str] = None
-    verification_status: str = "VERIFIED"
+    verification_status: Optional[str] = None
     explanation: Optional[str] = None
     related_transaction_id: Optional[str] = None
     related_account_id: Optional[str] = None
@@ -162,7 +160,6 @@ class AgentFindingSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     finding_key: str
     finding_value: str
-    confidence: float
 
 class AgentExecutionSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -175,7 +172,6 @@ class AgentExecutionSchema(BaseModel):
     execution_time_ms: int = 0
     input_summary: Optional[str] = None
     findings: Optional[str] = None
-    confidence_score: float
     evidence_ids: List[str] = []
     output_json: Dict[str, Any] = {}
     error_message: Optional[str] = None
@@ -276,8 +272,16 @@ class CaseDetailSchema(BaseModel):
 
 class CaseApprovalAction(BaseModel):
     action: str  # APPROVE or REJECT
-    investigator_name: str = Field(default="Chief Security Officer", min_length=1, max_length=128)
-    reason: str = Field(default="Authorized based on AI multi-agent graph corroboration", max_length=1000)
+    investigator_name: str = Field(min_length=1, max_length=128)
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("investigator_name", "reason")
+    @classmethod
+    def require_non_whitespace(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("A non-empty value is required")
+        return value
 
 class CreateOrderSchema(BaseModel):
     amount: float = Field(gt=0, allow_inf_nan=False)
@@ -289,8 +293,17 @@ class CreateOrderSchema(BaseModel):
 class RefundRequestSchema(BaseModel):
     payment_id: Optional[str] = Field(default=None, max_length=64)
     amount: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
-    reason: str = Field(default="Fraudulent transaction flagged by AgentShield multi-agent investigation", max_length=1000)
-    investigator: str = Field(default="Senior Fraud Officer", min_length=1, max_length=128)
+    currency: Optional[str] = Field(default=None, min_length=3, max_length=3, pattern="^[A-Za-z]{3}$")
+    reason: str = Field(min_length=1, max_length=1000)
+    investigator: str = Field(min_length=1, max_length=128)
+
+    @field_validator("reason", "investigator")
+    @classmethod
+    def require_non_whitespace(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("A non-empty value is required")
+        return value
 
 # Audit Schemas
 class AuditLogSchema(BaseModel):

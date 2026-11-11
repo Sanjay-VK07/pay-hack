@@ -260,7 +260,7 @@ class LLMProviderService:
                 "Verify PayPal capture status and available refundable balance",
                 "Obtain explicit Senior Fraud Officer sign-off in the Investigation Workspace",
                 "Dispatch idempotent reversal through PayPal Refund API",
-                "Record immutable transaction audit event to ledger"
+                "Record chronological audit event to relational ledger"
             ],
             "requires_human_signoff": True
         }

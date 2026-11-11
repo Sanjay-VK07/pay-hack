@@ -19,33 +19,42 @@ class IdentityIntelligenceAgent(BaseAgent):
         is_emulator = device.get("is_emulator", False)
         
         if is_emulator:
-            flags.append("Device runtime identified as an emulated virtual environment (anti-fraud bypass signature).")
+            flags.append("The linked local device record is marked as an emulator; this does not independently verify hardware or intent.")
 
         if shared_accounts_count > 1:
-            flags.append(f"Device fingerprint '{device.get('device_fingerprint', '')[:8]}...' shared with {shared_accounts_count - 1} other unrelated accounts.")
+            flags.append(f"Local transaction records link this device fingerprint with {shared_accounts_count - 1} other account profile(s); ownership or authorization was not verified.")
 
         if shared_identities_count > 1:
-            flags.append(f"Payment credential '{payment_identity.get('masked_value', 'Unknown')}' linked across {shared_identities_count} distinct account profiles.")
+            flags.append(f"Local transaction records link this payment identity with {shared_identities_count} account profile(s); credential ownership was not verified.")
 
         if payment_identity.get("risk_flags"):
             flags.append(f"Payment credential active risk tags: {', '.join(payment_identity.get('risk_flags'))}.")
 
         account_age = customer.get("account_age_days", 30)
         if account_age < 7:
-            flags.append(f"Synthetic identity risk: New account created only {account_age} days ago.")
+            flags.append(f"The local customer record lists an account age of {account_age} days; this is a heuristic review signal.")
 
         # Attempt LLM analysis if configured
         llm_response = None
         if self.has_llm:
-            prompt = f"Analyze identity for customer {customer.get('email')}, IP {ip_address}, device {device}. Flags: {flags}."
-            system = "You are an Identity Intelligence Agent. Return JSON with keys: summary, flags (list), confidence_score (float 0-1)."
+            provider_context = {
+                "device_type": device.get("device_type", "UNKNOWN"),
+                "emulator_flag_in_local_record": bool(is_emulator),
+                "shared_device_account_count": shared_accounts_count,
+                "shared_payment_identity_account_count": shared_identities_count,
+                "payment_identity_risk_flag_count": len(payment_identity.get("risk_flags") or []),
+                "account_age_days_in_local_record": account_age,
+                "ip_address_present": bool(ip_address),
+                "review_signal_count": len(flags),
+            }
+            prompt = f"Summarize these aggregated, unverified local review signals only: {provider_context}. Do not infer a person's identity, intent, device hardware, or fraud status."
+            system = "You are an Identity Intelligence Agent. Use only the supplied aggregate fields and do not invent evidence. Return JSON with keys: summary, flags (list)."
             llm_response = self._call_llm_if_available(prompt, system)
 
         if llm_response and "summary" in llm_response:
             return {
                 "is_llm_generated": True,
                 "summary": llm_response.get("summary"),
-                "confidence_score": llm_response.get("confidence_score", 0.93),
                 "findings": {
                     "device_type": device.get("device_type", "UNKNOWN"),
                     "device_fingerprint": device_fingerprint,
@@ -61,13 +70,12 @@ class IdentityIntelligenceAgent(BaseAgent):
         summary = (
             f"Device and Identity assessment for {customer.get('full_name', 'User')}. "
             + (f"Observed device fingerprint: {device_fingerprint}. " if device_fingerprint else "")
-            + (f"High-threat identity signals detected: {'; '.join(flags)}." if flags else "Valid single-origin hardware profile and payment identity verified.")
+            + (f"Local review signals: {'; '.join(flags)}." if flags else "No identity risk flags were found in the available local records; identity was not independently verified.")
         )
 
         return {
             "is_llm_generated": False,
             "summary": summary,
-            "confidence_score": 0.95 if flags else 0.98,
             "findings": {
                 "device_type": device.get("device_type", "UNKNOWN"),
                 "device_fingerprint": device_fingerprint,

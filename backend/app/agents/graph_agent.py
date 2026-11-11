@@ -4,7 +4,7 @@ from app.agents.base_agent import BaseAgent
 class GraphIntelligenceAgent(BaseAgent):
     name: str = "Graph Intelligence Agent"
     stage: str = "GRAPH_INTEL"
-    description: str = "Analyzes entity relationship graphs via NetworkX, uncovering coordinated clusters, device collisions, and multi-hop fraud rings."
+    description: str = "Summarizes local entity relationships from transaction, device, and payment-identity records."
 
     def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         cluster_info = inputs.get("cluster_info") or {}
@@ -21,15 +21,14 @@ class GraphIntelligenceAgent(BaseAgent):
         graph_anomalies: List[str] = []
         if is_coordinated:
             graph_anomalies.append(
-                f"Multi-entity collision: NetworkX graph traversal discovered cluster {cluster_id} "
-                f"spanning {len(related_accounts)} accounts connected through shared infrastructure."
+                f"Local graph traversal found a linked activity group spanning {len(related_accounts)} account records."
             )
         if len(shared_devices) > 0:
-            graph_anomalies.append(f"Hardware graph collision: {len(shared_devices)} device node(s) shared across disjoint account entities.")
+            graph_anomalies.append(f"Local records link {len(shared_devices)} device node(s) with multiple account records; ownership is not established.")
         if len(shared_identities) > 0:
-            graph_anomalies.append(f"Payment credential collision: {len(shared_identities)} payment identity node(s) reused across accounts.")
+            graph_anomalies.append(f"Local records link {len(shared_identities)} payment identity node(s) with multiple accounts; authorization is not established.")
         if two_hop_count > 4:
-            graph_anomalies.append(f"Dense two-hop graph neighborhood ({two_hop_count} connected nodes) indicating organized syndicate structure.")
+            graph_anomalies.append(f"The local graph has a two-hop neighborhood of {two_hop_count} connected records; this alone does not establish coordination.")
 
         # Attempt LLM graph reasoning if available
         llm_response = None
@@ -40,14 +39,13 @@ class GraphIntelligenceAgent(BaseAgent):
                 f"Two-Hop Size: {two_hop_count}, Financial Exposure: ${total_cluster_exposure:.2f}. "
                 f"Anomalies: {graph_anomalies}."
             )
-            system = "You are a FinTech Graph Intelligence Agent. Provide a concise JSON analysis with keys: summary, topology_risk (string), confidence_score (float 0-1)."
+            system = "You are a FinTech Graph Intelligence Agent. Provide a concise JSON analysis with keys: summary, topology_risk (string)."
             llm_response = self._call_llm_if_available(prompt, system)
 
         if llm_response and "summary" in llm_response:
             return {
                 "is_llm_generated": True,
                 "summary": llm_response.get("summary"),
-                "confidence_score": llm_response.get("confidence_score", 0.95),
                 "findings": {
                     "cluster_id": cluster_id,
                     "cluster_type": cluster_type,
@@ -57,7 +55,7 @@ class GraphIntelligenceAgent(BaseAgent):
                     "shared_identities_count": len(shared_identities),
                     "two_hop_neighborhood_size": two_hop_count,
                     "total_cluster_exposure": total_cluster_exposure,
-                    "topology_risk": llm_response.get("topology_risk", "HIGH_DENSITY_COORDINATION"),
+                    "topology_risk": llm_response.get("topology_risk", "LINKED_ACTIVITY_FOR_REVIEW"),
                     "graph_anomalies": graph_anomalies
                 }
             }
@@ -65,13 +63,12 @@ class GraphIntelligenceAgent(BaseAgent):
         # Deterministic Expert Output
         summary = (
             f"NetworkX graph analysis for cluster {cluster_id}. "
-            + (f"Coordinated syndicate topology detected: {'; '.join(graph_anomalies)}" if graph_anomalies else "Isolated transaction node with no suspicious entity sharing.")
+            + (f"Local relationships for analyst review: {'; '.join(graph_anomalies)}" if graph_anomalies else "No linked-entity pattern was found in the available local records.")
         )
 
         return {
             "is_llm_generated": False,
             "summary": summary,
-            "confidence_score": 0.97 if is_coordinated else 0.99,
             "findings": {
                 "cluster_id": cluster_id,
                 "cluster_type": cluster_type,
@@ -81,7 +78,7 @@ class GraphIntelligenceAgent(BaseAgent):
                 "shared_identities_count": len(shared_identities),
                 "two_hop_neighborhood_size": two_hop_count,
                 "total_cluster_exposure": total_cluster_exposure,
-                "topology_risk": "COORDINATED_FRAUD_RING" if is_coordinated else "ISOLATED_LEGITIMATE",
+                "topology_risk": "LINKED_ACTIVITY_FOR_REVIEW" if is_coordinated else "NO_LOCAL_LINK_PATTERN_FOUND",
                 "graph_anomalies": graph_anomalies
             }
         }

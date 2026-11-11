@@ -498,8 +498,8 @@ export default function DashboardPage() {
                 <Bot className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white">Autonomous Agent Activity Stream</h3>
-                <p className="text-xs text-slate-400">Real-time reasoning logs across the specialized investigation agents</p>
+                <h3 className="text-sm font-semibold text-white">Investigation Activity</h3>
+                <p className="text-xs text-slate-400">Stored execution records from the investigation workflow</p>
               </div>
             </div>
             <Link
@@ -517,7 +517,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-200">{agent.agent_name}</span>
                   <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                    {(agent.confidence_score * 100).toFixed(0)}% Conf
+                    Stored execution record
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">

@@ -232,8 +232,7 @@ class SeedService:
             except Exception as e:
                 print(f"Error pre-investigating {target_tx}: {e}")
 
-        # 6. Pre-create verified captured PayPal payment records for syndicate transactions
-        # This allows judges to inspect and trigger real/simulated Sandbox refunds safely once approved!
+        # 6. Pre-seed local simulated payment records for the demo.
         # Note: TXN_FRAUD_905 represents an authorized transaction that was NEVER captured by merchant,
         # so capture_id is strictly None, and it is explicitly ineligible for refund reversal.
         payment_specs = [
@@ -254,16 +253,18 @@ class SeedService:
                 currency="USD",
                 payment_status=p_stat,
                 refund_status=ref_stat,
-                approval_status="APPROVED" if c_id == "CASE_FRAUD_905" else "PENDING",
+                # Seeded ledger rows have no reviewer decision; case approval will
+                # synchronize this field through the explicit human-review flow.
+                approval_status="PENDING",
                 operation_type=op_type,
                 idempotency_key=f"IDEM_REFUND_{tx_ref}",
                 is_simulated=True,
                 raw_response={
                     "status": p_stat,
                     "capture_id": cap_id,
-                    "seller_protection": {"status": "ELIGIBLE" if cap_id else "INELIGIBLE_NO_CAPTURE"},
+                    "seller_protection": {"status": "NOT_CHECKED"},
                     "amount": {"value": f"{amt:.2f}", "currency_code": "USD"},
-                    "note": "Settled capture verified" if cap_id else "Authorization hold never captured by merchant. Ineligible for refund reversal."
+                    "note": "Pre-seeded local simulation; not a PayPal API response." if cap_id else "Local demo record has no capture; no refund eligibility."
                 }
             )
             self.db.add(demo_payment)

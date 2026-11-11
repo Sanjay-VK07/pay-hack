@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 from app.agents.base_agent import BaseAgent
 
 class ResponseAgent(BaseAgent):
-    name: str = "Autonomous Response Agent"
+    name: str = "Response Planning Agent"
     stage: str = "RESPONSE"
     description: str = "Formulates authorized mitigation workflows with mandatory human approval gating."
 
@@ -20,42 +20,31 @@ class ResponseAgent(BaseAgent):
         workflow_steps: List[str] = []
 
         if risk_level == "CRITICAL":
-            workflow_steps.append("1. Place immediate temporary lock on customer account credentials.")
-            workflow_steps.append(f"2. Stage PayPal Sandbox Refund of ${amount:.2f} {currency} pending human approval.")
-            workflow_steps.append("3. Flag hardware fingerprint across Global Watchlist.")
-            workflow_steps.append("4. Issue forensic alert to Chief Risk Officer.")
+            workflow_steps.append("Review the linked transaction, identity, and graph records with an investigator.")
+            workflow_steps.append(f"If a captured payment is confirmed, consider a refund of ${amount:.2f} {currency} after authorized human review.")
+            workflow_steps.append("No account lock, watchlist update, notification, or payment action is performed by this recommendation.")
         elif risk_level == "HIGH":
-            workflow_steps.append("1. Route transaction to Human Investigator queue.")
-            workflow_steps.append("2. Enforce 2FA/Step-up verification on next checkout attempt.")
-            workflow_steps.append("3. Request manual receipt and device identification review.")
+            workflow_steps.append("Request investigator review of the stored transaction and identity records.")
+            workflow_steps.append("Consider step-up verification or additional documentation if supported by the merchant workflow.")
         elif risk_level == "MEDIUM":
-            workflow_steps.append("1. Permit transaction execution under heightened anomaly monitoring.")
-            workflow_steps.append("2. Increment risk counter on customer account profile.")
+            workflow_steps.append("Review the recorded signals; no transaction permission or account setting is changed by this recommendation.")
         else:
-            workflow_steps.append("1. Clear transaction for standard merchant settlement.")
-            workflow_steps.append("2. Record verified legitimate baseline event.")
-
-        # If already approved by human investigator
-        execution_authorized = False
-        if approval_status == "APPROVED" and risk_level == "CRITICAL":
-            workflow_steps.append("✓ Human Approval Granted: Authorized for automated PayPal refund execution.")
-            execution_authorized = True
+            workflow_steps.append("No local rule triggered a review recommendation. This does not verify the transaction as legitimate.")
 
         summary = (
             f"Response mitigation plan: {recommended_action}."
-            + (" Requires explicit Human-in-the-Loop approval before PayPal financial refund execution." if requires_human_approval and approval_status != "APPROVED" else " Automated workflow cleared.")
+            + (" Requires authorized human review and separate payment eligibility checks before any financial action." if requires_human_approval else " This recommendation does not change transaction or account state.")
         )
 
         return {
             "is_llm_generated": False,
             "summary": summary,
-            "confidence_score": 0.99,
             "findings": {
                 "action": recommended_action,
                 "risk_level": risk_level,
                 "requires_human_approval": requires_human_approval,
                 "approval_status": approval_status,
-                "execution_authorized": execution_authorized,
+                "execution_authorized": False,
                 "workflow_steps": workflow_steps
             }
         }

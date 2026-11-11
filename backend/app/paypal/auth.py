@@ -6,9 +6,14 @@ from app.config import settings
 
 class PayPalAuth:
     def __init__(self):
-        self.client_id = settings.PAYPAL_CLIENT_ID
-        self.client_secret = settings.PAYPAL_CLIENT_SECRET
-        self.base_url = settings.PAYPAL_BASE_URL.rstrip('/')
+        self.client_id = (settings.PAYPAL_CLIENT_ID or "").strip()
+        self.client_secret = (settings.PAYPAL_CLIENT_SECRET or "").strip()
+        try:
+            self.base_url = settings.validated_paypal_base_url
+            self._base_url_error: Optional[str] = None
+        except ValueError as ve:
+            self.base_url = "https://api-m.sandbox.paypal.com"
+            self._base_url_error = str(ve)
         self._cached_token: Optional[str] = None
         self._token_expires_at: float = 0.0
 
@@ -21,6 +26,9 @@ class PayPalAuth:
         Retrieves an OAuth 2.0 Bearer token from PayPal Sandbox.
         Returns (token, error_message).
         """
+        if getattr(self, "_base_url_error", None):
+            return None, self._base_url_error
+
         if not self.has_credentials:
             return None, "PAYPAL_CREDENTIALS_MISSING"
 

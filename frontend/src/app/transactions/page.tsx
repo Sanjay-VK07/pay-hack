@@ -245,11 +245,11 @@ export default function TransactionsPage() {
             <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
               <span>Transaction Intelligence</span>
               <span className="text-xs font-mono text-slate-400 px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
-                AG Grid Enterprise Layout
+                AG Grid Transaction Table
               </span>
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              Deterministic transaction ledger with real-time risk scores and multi-hop evidence correlation
+              Transaction ledger with heuristic risk scores and linked-record context
             </p>
           </div>
 
@@ -395,7 +395,7 @@ export default function TransactionsPage() {
                         ) : (
                           <Play className="h-3.5 w-3.5 fill-current" />
                         )}
-                        <span>Run Autonomous Multi-Agent Investigation</span>
+                        <span>Run Investigation Analysis</span>
                       </button>
 
                       {txnDetail?.investigations && txnDetail.investigations.length > 0 && (

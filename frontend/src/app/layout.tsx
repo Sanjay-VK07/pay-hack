@@ -4,7 +4,7 @@ import { Sidebar } from '@/components/Sidebar';
 
 export const metadata: Metadata = {
   title: 'AgentShield | Intelligence Behind Every Transaction',
-  description: 'Autonomous Multi-Agent Payment Fraud Investigation & Prevention Platform with PayPal Sandbox Integration',
+  description: 'Evidence-led payment-risk investigation workbench with PayPal Sandbox safeguards',
 };
 
 export default function RootLayout({

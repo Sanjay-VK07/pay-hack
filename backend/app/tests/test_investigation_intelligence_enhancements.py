@@ -37,10 +37,9 @@ def test_paypal_sandbox_verification_endpoint_and_modes(client):
     assert "seller_protection" in vdata
     assert vdata["seller_protection"] == "ELIGIBLE"
 
-def test_evidence_confidence_engine_fields(client):
+def test_evidence_does_not_fabricate_confidence_metadata(client):
     """
-    PRIORITY 2: Every evidence record must provide confidence score, source reliability,
-    corroboration count, observed vs baseline values, and alternative explanations.
+    Evidence confidence metadata is optional unless it is sourced and calibrated.
     """
     cases_resp = client.get("/api/investigations")
     assert cases_resp.status_code == 200
@@ -57,9 +56,9 @@ def test_evidence_confidence_engine_fields(client):
     for ev in evidence_list:
         assert ev["evidence_type"] is not None
         assert ev["severity"] in ("LOW", "MEDIUM", "HIGH", "CRITICAL")
-        assert 0.0 <= ev["confidence_score"] <= 1.0
-        assert ev["source_reliability"] is not None and len(ev["source_reliability"]) > 0
-        assert ev["corroboration_count"] >= 1
+        assert ev.get("confidence_score") is None
+        assert ev.get("source_reliability") is None
+        assert ev.get("corroboration_count") is None
         assert ev["observed_value"] is not None
         assert ev["baseline_value"] is not None
         assert ev["explanation"] is not None
@@ -70,18 +69,8 @@ def test_evidence_confidence_engine_fields(client):
             assert ev["alternative_explanation"] is not None
             assert len(ev["alternative_explanation"]) > 10
 
-def test_eight_stage_agent_reasoning_timeline(client):
-    """
-    PRIORITY 3: Visual timeline showing exactly 8 execution stages:
-    1. Transaction anomaly detected
-    2. Identity indicators examined
-    3. Graph relationships discovered
-    4. Evidence corroborated
-    5. Risk score calculated
-    6. Recommended action generated
-    7. Human approval requested
-    8. PayPal operation executed
-    """
+def test_case_timeline_uses_only_stored_events(client):
+    """Case reads must not invent completed agent or PayPal events."""
     cases_resp = client.get("/api/investigations")
     cases = cases_resp.json()
     case_id = cases[0]["id"]
@@ -90,31 +79,18 @@ def test_eight_stage_agent_reasoning_timeline(client):
     detail = detail_resp.json()
     timeline = detail.get("reasoning_timeline", [])
 
-    assert len(timeline) == 8, f"Expected 8 timeline stages, found {len(timeline)}"
-
-    expected_stages = [
-        "Transaction Anomaly Detected",
-        "Identity Indicators Examined",
-        "Graph Relationships Discovered",
-        "Evidence Corroborated",
-        "Risk Score Calculated",
-        "Recommended Action Generated",
-        "Human Approval Requested",
-        "PayPal Operation Executed"
-    ]
-
-    for idx, expected_name in enumerate(expected_stages, start=1):
-        stage = timeline[idx - 1]
+    assert timeline
+    for idx, stage in enumerate(timeline, start=1):
         assert stage["stage_number"] == idx
-        assert stage["stage_name"] == expected_name
-        assert stage["status"] in ("COMPLETED", "IN_PROGRESS", "PENDING", "PENDING_APPROVAL", "PENDING_EXECUTION", "REJECTED", "FAILED")
         assert stage["actor"] is not None
         assert len(stage["summary"]) > 0
+        assert stage["stage_name"] not in ("PayPal Operation Executed", "Evidence Corroborated")
+        if stage["stage_name"] == "Payment Operation Record":
+            assert "did not query PayPal" in stage["summary"]
 
 def test_deterministic_risk_score_exact_calculation(client):
     """
-    PRIORITY 4: Exact mathematical breakdown when risk score is 100/100:
-    Formula, contributing risk factors, raw sum, and clamping.
+    Current-version heuristic scores include a formula and explicit non-probability disclaimer.
     """
     cases_resp = client.get("/api/investigations")
     cases = cases_resp.json()
@@ -124,12 +100,12 @@ def test_deterministic_risk_score_exact_calculation(client):
     detail = detail_resp.json()
     scoring = detail.get("scoring_details", {})
 
+    if not scoring:
+        return  # Legacy assessments are intentionally not shown with a fabricated breakdown.
+    assert scoring.get("calculation_version") == "heuristic_v2"
     assert "deterministic_formula" in scoring
-    assert "raw_sum_of_weights" in scoring
     assert "clamped_risk_score" in scoring
-    assert scoring["clamped_risk_score"] == 100.0
-    assert scoring["raw_sum_of_weights"] >= 100.0
-    assert len(scoring.get("contributing_factors", [])) >= 5
+    assert "not a calibrated probability" in scoring["formula_explanation"]
 
     for factor in scoring["contributing_factors"]:
         assert "factor" in factor

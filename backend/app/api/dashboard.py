@@ -169,7 +169,6 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         "stage": a.stage,
         "status": a.status,
         "findings": a.findings,
-        "confidence_score": a.confidence_score,
         "started_at": a.started_at.isoformat()
     } for a in recent_agents]
 

@@ -31,15 +31,21 @@ class TransactionIntelligenceAgent(BaseAgent):
         # Attempt LLM refinement if available
         llm_response = None
         if self.has_llm:
-            prompt = f"Analyze transaction {transaction.get('id')} of amount {amount} {currency}. Anomalies noted: {anomalies}. Account: {customer.get('full_name')}."
-            system = "You are a FinTech Transaction Intelligence Agent. Provide a concise JSON analysis with keys: summary, anomalies (list), confidence_score (float 0-1)."
+            provider_context = {
+                "amount": amount,
+                "currency": currency,
+                "recent_transaction_count": recent_count,
+                "prior_failed_count": prior_failed_count,
+                "rule_signals": anomalies,
+            }
+            prompt = f"Summarize these local transaction signals only: {provider_context}. Do not infer customer identity, intent, or facts that are not provided."
+            system = "You are a FinTech Transaction Intelligence Agent. Use only supplied signals and do not invent evidence. Return JSON with keys: summary, anomalies (list)."
             llm_response = self._call_llm_if_available(prompt, system)
 
         if llm_response and "summary" in llm_response:
             return {
                 "is_llm_generated": True,
                 "summary": llm_response.get("summary"),
-                "confidence_score": llm_response.get("confidence_score", 0.94),
                 "findings": {
                     "amount_analysis": f"${amount:.2f} {currency}",
                     "velocity_window_count": recent_count,
@@ -51,13 +57,12 @@ class TransactionIntelligenceAgent(BaseAgent):
         # Deterministic Expert Output
         summary = (
             f"Evaluated transaction of ${amount:.2f} {currency}. "
-            + (f"Flagged {len(anomalies)} behavioral anomalies: {'; '.join(anomalies)}." if anomalies else "Transaction velocity and amount within legitimate baseline thresholds.")
+            + (f"Flagged {len(anomalies)} rule-based review signals: {'; '.join(anomalies)}." if anomalies else "No configured amount or velocity rule triggered; this does not establish that the transaction is legitimate.")
         )
 
         return {
             "is_llm_generated": False,
             "summary": summary,
-            "confidence_score": 0.96 if anomalies else 0.98,
             "findings": {
                 "amount_analysis": f"${amount:.2f} {currency}",
                 "velocity_window_count": recent_count,

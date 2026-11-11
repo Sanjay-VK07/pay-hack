@@ -354,7 +354,7 @@ def test_case_fraud_905_uncaptured_truthfulness_and_reversal_safety(client):
     assert verify_resp.status_code == 409
     assert "no valid completed capture" in verify_resp.json()["detail"].lower()
     assert pv["status"] == "UNCAPTURED"
-    assert pv["seller_protection"] == "INELIGIBLE_NO_CAPTURE"
+    assert pv["seller_protection"] == "NOT_CHECKED_NO_CAPTURE"
 
     # Assert TXN_FRAUD_905 is present in Payment Operations as an uncaptured, ineligible operation
     payments_resp = client.get("/api/payments")

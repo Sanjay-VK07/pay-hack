@@ -240,11 +240,11 @@ class MultiAgentOrchestrator:
                 observed_value=ev_data.get("observed_value"),
                 baseline_value=ev_data.get("baseline_value"),
                 severity=ev_data.get("severity", deterministic_risk["risk_level"]),
-                confidence_score=ev_data.get("confidence_score", 0.95),
-                source_reliability=ev_data.get("source_reliability", "HIGH - Verified Hardware / Network Telemetry"),
-                corroboration_count=ev_data.get("corroboration_count", 1),
+                confidence_score=ev_data.get("confidence_score"),
+                source_reliability=ev_data.get("source_reliability"),
+                corroboration_count=ev_data.get("corroboration_count"),
                 alternative_explanation=ev_data.get("alternative_explanation"),
-                verification_status=ev_data.get("verification_status", "VERIFIED"),
+                verification_status=ev_data.get("verification_status"),
                 explanation=ev_data.get("explanation"),
                 related_transaction_id=ev_data.get("related_transaction_id", transaction.id),
                 related_account_id=ev_data.get("related_account_id", customer.id if customer else None),
@@ -271,7 +271,7 @@ class MultiAgentOrchestrator:
             ("Graph Intelligence Agent", "GRAPH_INTEL", graph_result, max(18, int(graph_result.get("duration_ms", 54)))),
             ("Fraud Investigation Agent", "FRAUD_INVESTIGATION", inv_result, max(20, int(inv_result.get("duration_ms", 95)))),
             ("Risk Assessment Agent", "RISK_ASSESSMENT", risk_result, max(14, int(risk_result.get("duration_ms", 53)))),
-            ("Autonomous Response Agent", "RESPONSE", resp_result, max(10, int(resp_result.get("duration_ms", 34))))
+            ("Response Planning Agent", "RESPONSE", resp_result, max(10, int(resp_result.get("duration_ms", 34))))
         ]
 
         for ag_name, stage, res, exec_ms in agent_runs:
@@ -281,7 +281,7 @@ class MultiAgentOrchestrator:
                 existing_exec.status = res.get("status", "COMPLETED")
                 existing_exec.findings = res.get("summary")
                 existing_exec.output_json = res.get("output_json", {})
-                existing_exec.confidence_score = res.get("confidence_score", 0.95)
+                existing_exec.confidence_score = None
                 existing_exec.evidence_ids = stage_evidence_map.get(stage, [])
                 existing_exec.execution_time_ms = exec_ms
                 existing_exec.completed_at = utcnow()
@@ -297,7 +297,7 @@ class MultiAgentOrchestrator:
                     execution_time_ms=exec_ms,
                     input_summary=f"Processed transaction {transaction.id} and associated telemetry",
                     findings=res.get("summary"),
-                    confidence_score=res.get("confidence_score", 0.95),
+                    confidence_score=None,
                     evidence_ids=stage_evidence_map.get(stage, []),
                     output_json=res.get("output_json", {})
                 )
@@ -316,7 +316,7 @@ class MultiAgentOrchestrator:
                             execution_id=exec_id,
                             finding_key=f_key,
                             finding_value=val_str,
-                            confidence=res.get("confidence_score", 0.95),
+                            confidence=None,
                             created_at=utcnow()
                         )
                         self.db.add(fnd)
@@ -359,7 +359,7 @@ class MultiAgentOrchestrator:
                     case_id=case.id,
                     action_type=f"EXECUTE_{deterministic_risk['recommended_action']}",
                     status="PENDING",
-                    requested_by="Autonomous Response Agent",
+                    requested_by="Response Planning Agent",
                     reason=f"High risk score ({deterministic_risk['risk_score']}) warrants human review before PayPal financial action."
                 )
                 self.db.add(app_req)

@@ -2,8 +2,10 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  const apiKey = process.env.NEXT_PUBLIC_AGENTSHIELD_API_KEY;
   const headers = {
     'Content-Type': 'application/json',
+    ...(apiKey ? { 'X-AgentShield-Key': apiKey } : {}),
     ...(options.headers || {}),
   };
 
@@ -78,7 +80,11 @@ export const api = {
     return request<any[]>(`/payments?${query.toString()}`);
   },
   verifyPaymentCapture: (paymentId: string) => request<any>(`/payments/${paymentId}/verify`),
-  refundPayment: (paymentId: string, data: { reason?: string; investigator?: string } = {}) =>
+  createPayPalOrder: (data: { amount: number; currency?: string; transaction_ref?: string; case_id?: string; description?: string }) =>
+    request<any>('/payments/orders/create', { method: 'POST', body: JSON.stringify(data) }),
+  capturePayPalOrder: (orderId: string) =>
+    request<any>(`/payments/orders/${orderId}/capture`, { method: 'POST' }),
+  refundPayment: (paymentId: string, data: { reason?: string; investigator?: string; currency?: string; amount?: number } = {}) =>
     request<any>(`/payments/${paymentId}/refund`, { method: 'POST', body: JSON.stringify({ payment_id: paymentId, ...data }) }),
   verifyRefundStatus: (paymentId: string) => request<any>(`/payments/${paymentId}/refund/verify`, { method: 'POST' }),
 

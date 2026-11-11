@@ -25,7 +25,7 @@ class GraphIntelligenceEngine:
                 label=acc.full_name,
                 type="ACCOUNT",
                 email=acc.email,
-                risk_score=94.0 if acc.risk_rating == "CRITICAL" else (72.0 if acc.risk_rating == "HIGH" else (45.0 if acc.risk_rating == "MEDIUM" else 15.0)),
+                risk_score=None,
                 risk_level=acc.risk_rating,
                 account_number=acc.account_number,
                 country=acc.country,
@@ -47,8 +47,8 @@ class GraphIntelligenceEngine:
                 os=dev.os,
                 browser=dev.browser,
                 is_emulator=dev.is_emulator,
-                risk_score=90.0 if dev.is_emulator else (70.0 if dev.risk_level == "HIGH" else 20.0),
-                risk_level="CRITICAL" if dev.is_emulator else dev.risk_level,
+                risk_score=None,
+                risk_level=dev.risk_level,
                 entity="device"
             )
 
@@ -63,7 +63,7 @@ class GraphIntelligenceEngine:
                 type="PAYMENT_IDENTITY",
                 identity_type=pident.identity_type,
                 masked_value=pident.masked_value,
-                risk_score=88.0 if is_pid_flagged else 18.0,
+                risk_score=None,
                 risk_level="HIGH" if is_pid_flagged else "LOW",
                 entity="payment_identity"
             )
@@ -100,16 +100,14 @@ class GraphIntelligenceEngine:
             acc_node_key = txn.customer_id
             if self.G.has_node(acc_node_key):
                 owns_suspicious = is_txn_critical
-                owns_reason = f"Account authorized high-threat transaction of ${txn.amount:.2f} {txn.currency}" if is_txn_critical else "Standard customer order authorization"
+                owns_reason = f"Transaction record references account {acc_node_key}."
                 self.G.add_edge(
                     acc_node_key,
                     txn_node_key,
                     relationship="ACCOUNT_MADE_TRANSACTION",
                     weight=1.0,
-                    confidence=0.99,
-                    risk_contribution="+25.0 (Transaction Risk)" if is_txn_critical else "0.0 (Baseline)",
-                    supporting_evidence=f"Authorized transaction ${txn.amount:.2f} executed by account holder {acc_node_key}.",
-                    alternative_explanation="Customer legitimately authorized this purchase order.",
+                    supporting_evidence=f"The transaction record references customer account {acc_node_key}.",
+                    alternative_explanation="A stored account-to-transaction link does not establish who authorized the purchase.",
                     evidence_id=f"EV_MADE_{txn.id}",
                     is_suspicious=owns_suspicious,
                     suspicious_reason=owns_reason,
@@ -128,7 +126,7 @@ class GraphIntelligenceEngine:
                         label=f"IP: {txn.ip_address}",
                         type="IP_INDICATOR",
                         ip_address=txn.ip_address,
-                        risk_score=85.0 if is_proxy_ip else 25.0,
+                        risk_score=None,
                         risk_level="HIGH" if is_proxy_ip else "LOW",
                         is_proxy=is_proxy_ip,
                         entity="ip"
@@ -140,13 +138,11 @@ class GraphIntelligenceEngine:
                     ip_node_key,
                     relationship="TRANSACTION_ORIGINATES_FROM_IP",
                     weight=1.0,
-                    confidence=0.70 if is_proxy_ip else 0.50,
-                    risk_contribution="+15.0 (Proxy Telemetry)" if is_proxy_ip else "0.0 (Residential ISP)",
-                    supporting_evidence=f"Network egress telemetry confirms connection from IP {txn.ip_address}." + (" (Known Tor Exit / Hosting Datacenter)" if is_proxy_ip else ""),
+                    supporting_evidence=f"The transaction record stores IP address {txn.ip_address}; no live network or threat-intelligence check was performed.",
                     alternative_explanation="Shared residential ISP, corporate VPN, or university NAT gateway may legitimately pool users under this IP.",
                     evidence_id=f"EV_IP_{txn.id}",
                     is_suspicious=is_proxy_ip,
-                    suspicious_reason=f"Routing through verified Tor Exit / Datacenter Proxy ({txn.ip_address})" if is_proxy_ip else "Standard consumer residential ISP IP",
+                    suspicious_reason=f"IP matched a configured demo rule ({txn.ip_address}); this is not a live reputation check." if is_proxy_ip else "IP address is present in the local transaction record; reputation was not checked.",
                     shared_indicator=txn.ip_address
                 )
                 
@@ -156,13 +152,11 @@ class GraphIntelligenceEngine:
                         ip_node_key,
                         relationship="ACCOUNT_SHARES_IP_INDICATOR",
                         weight=0.8,
-                        confidence=0.65,
-                        risk_contribution="+15.0 (Infrastructure Link)" if is_proxy_ip else "0.0 (Benign ISP)",
-                        supporting_evidence=f"Account session routed through anonymized proxy {txn.ip_address}" if is_proxy_ip else "Account session verified on consumer ISP",
+                        supporting_evidence=f"Local transaction records link this account with IP {txn.ip_address}; no live network or reputation check was performed.",
                         alternative_explanation="Shared IP addresses alone do not constitute conclusive proof of fraud; multiple distinct users may share public Wi-Fi or carrier-grade NAT.",
                         evidence_id=f"EV_ACC_IP_{txn.customer_id}_{txn.ip_address}",
                         is_suspicious=is_proxy_ip,
-                        suspicious_reason=f"Account session routed through anonymized proxy {txn.ip_address}" if is_proxy_ip else "Account session verified on consumer ISP",
+                        suspicious_reason=f"IP matched a configured demo rule ({txn.ip_address}); this is not a live reputation check." if is_proxy_ip else "IP address is present in the local transaction record; reputation was not checked.",
                         shared_indicator=txn.ip_address
                     )
 
@@ -178,13 +172,11 @@ class GraphIntelligenceEngine:
                         dev_node_key,
                         relationship="TRANSACTION_EXECUTED_ON_DEVICE",
                         weight=1.0,
-                        confidence=0.96,
-                        risk_contribution="+40.0 (Emulator Runtime)" if is_emul else "0.0 (Standard Device)",
-                        supporting_evidence=f"Checkout executed within emulated runtime {dev_model.device_fingerprint[:8]}" if is_emul else "Executed on verified physical device",
+                        supporting_evidence=f"Linked device record is marked emulator ({dev_model.device_fingerprint[:8]}); no independent hardware sensor check was performed." if is_emul else "Transaction references a device record not marked as an emulator; physical hardware was not independently verified.",
                         alternative_explanation="Legitimate developer testing on emulator or secondary family device.",
                         evidence_id=f"EV_DEV_{txn.id}",
                         is_suspicious=is_emul,
-                        suspicious_reason=f"Checkout executed within emulated runtime {dev_model.device_fingerprint[:8]}" if is_emul else "Executed on verified physical device",
+                        suspicious_reason=f"Linked demo device record is marked emulator ({dev_model.device_fingerprint[:8]})." if is_emul else "Linked device record is not marked as an emulator; hardware was not independently verified.",
                         shared_indicator=dev_model.device_fingerprint if dev_model else ""
                     )
                     if self.G.has_node(acc_node_key):
@@ -197,17 +189,15 @@ class GraphIntelligenceEngine:
                         dev_is_shared = shared_owners > 0
                         dev_susp = is_emul or dev_is_shared
                         dev_reason = (
-                            f"Device collision: Hardware identifier '{dev_model.device_fingerprint[:8]}' shared across {shared_owners + 1} distinct accounts."
-                            + (" Emulator runtime detected." if is_emul else "")
-                        ) if dev_susp else "Single-owner physical device connection"
+                            f"Local transaction records reference device fingerprint '{dev_model.device_fingerprint[:8]}' from {shared_owners + 1} account profiles."
+                            + (" The linked demo device record is marked as an emulator; hardware was not independently verified." if is_emul else "")
+                        ) if dev_susp else "No shared-device or emulator flag is recorded in this local dataset."
 
                         self.G.add_edge(
                             acc_node_key,
                             dev_node_key,
                             relationship="ACCOUNT_USES_DEVICE",
                             weight=1.5,
-                            confidence=0.95,
-                            risk_contribution="+35.0 (Syndicate Hardware)" if dev_susp else "0.0 (Personal Device)",
                             supporting_evidence=dev_reason,
                             alternative_explanation="Household sharing a family desktop or tablet. Look for matching surnames or delivery addresses.",
                             evidence_id=f"EV_ACC_DEV_{txn.customer_id}_{txn.device_id}",
@@ -228,13 +218,11 @@ class GraphIntelligenceEngine:
                         pid_node_key,
                         relationship="TRANSACTION_USES_PAYMENT_IDENTITY",
                         weight=1.0,
-                        confidence=0.98,
-                        risk_contribution="+30.0 (Flagged Token)" if has_flags else "0.0 (Verified Token)",
-                        supporting_evidence=f"Credential {pid_model.masked_value} flagged on carding watchlist" if has_flags else "Standard card credential verification",
+                        supporting_evidence=f"Local payment identity record contains demo risk flags: {', '.join(pid_model.risk_flags)}." if has_flags else "Transaction references this local payment identity record; no credential verification was performed.",
                         alternative_explanation="Authorized employee using corporate procurement card.",
                         evidence_id=f"EV_PID_{txn.id}",
                         is_suspicious=has_flags,
-                        suspicious_reason=f"Credential {pid_model.masked_value} flagged on carding watchlist" if has_flags else "Standard card credential verification",
+                        suspicious_reason=f"Local payment identity record contains demo risk flags: {', '.join(pid_model.risk_flags)}." if has_flags else "No credential risk flag is stored in this local record; external status was not checked.",
                         shared_indicator=pid_model.masked_value if pid_model else ""
                     )
                     if self.G.has_node(acc_node_key):
@@ -246,17 +234,15 @@ class GraphIntelligenceEngine:
                         pid_is_shared = shared_pid_owners > 0
                         pid_susp = has_flags or pid_is_shared
                         pid_reason = (
-                            f"Credential collision: Payment token '{pid_model.masked_value}' reused across {shared_pid_owners + 1} distinct customer profiles."
+                            f"Local transaction records link payment identity '{pid_model.masked_value}' to {shared_pid_owners + 1} customer profiles."
                             + (f" Risk tags: {', '.join(pid_model.risk_flags)}." if has_flags else "")
-                        ) if pid_susp else "Dedicated single-user payment credential"
+                        ) if pid_susp else "Payment identity not shared in the local dataset"
 
                         self.G.add_edge(
                             acc_node_key,
                             pid_node_key,
                             relationship="ACCOUNT_SHARES_PAYMENT_IDENTITY",
                             weight=2.0,
-                            confidence=0.98,
-                            risk_contribution="+35.0 (Shared Token Collision)" if pid_susp else "0.0 (Dedicated Token)",
                             supporting_evidence=pid_reason,
                             alternative_explanation="Shared corporate credit card or authorized family members under joint account.",
                             evidence_id=f"EV_ACC_PID_{txn.customer_id}_{txn.payment_identity_id}",
@@ -304,15 +290,19 @@ class GraphIntelligenceEngine:
                 if len(neighbors) > 1:
                     shared_identities.append((pid, [self.G.nodes[nbr]["node_id"] for nbr in neighbors]))
 
-            is_coordinated = len(shared_devices) > 0 or len(shared_identities) > 0 or len(accounts) >= 3
+            is_coordinated = len(shared_devices) > 0 or len(shared_identities) > 0
 
             # Calculate cluster metrics
             total_amount = sum(self.G.nodes[t].get("amount", 0.0) for t in transactions)
-            suspicious_amount = sum(
+            flagged_transaction_value = sum(
                 self.G.nodes[t].get("amount", 0.0) for t in transactions 
                 if self.G.nodes[t].get("risk_level") in ("HIGH", "CRITICAL")
             )
-            scores = [self.G.nodes[n].get("risk_score", 0.0) for n in comp]
+            scores = [
+                self.G.nodes[n].get("risk_score")
+                for n in transactions
+                if isinstance(self.G.nodes[n].get("risk_score"), (int, float))
+            ]
             avg_score = sum(scores) / len(scores) if scores else 0.0
             max_score = max(scores) if scores else 0.0
 
@@ -321,10 +311,7 @@ class GraphIntelligenceEngine:
                 1 for u, v, d in subgraph.edges(data=True) if d.get("is_suspicious")
             )
 
-            # Boost cluster risk if coordinated sharing found
             cluster_risk = max_score
-            if is_coordinated and len(accounts) > 1:
-                cluster_risk = min(98.5, max(85.0, avg_score * 1.4))
 
             cluster_id = f"CLUSTER_{idx + 1:03d}"
 
@@ -334,18 +321,18 @@ class GraphIntelligenceEngine:
 
             cluster_type = "ISOLATED_ACTIVITY"
             if len(shared_devices) > 0 and len(shared_identities) > 0:
-                cluster_type = "COORDINATED_FRAUD_RING"
+                cluster_type = "SHARED_DEVICE_AND_IDENTITY_GROUP"
             elif len(shared_devices) > 0:
-                cluster_type = "DEVICE_SHARING_SYNDICATE"
+                cluster_type = "SHARED_DEVICE_GROUP"
             elif len(shared_identities) > 0:
-                cluster_type = "IDENTITY_THEFT_NETWORK"
+                cluster_type = "SHARED_IDENTITY_GROUP"
             elif len(accounts) > 1:
-                cluster_type = "SHARED_INFRASTRUCTURE"
+                cluster_type = "MULTI_ACCOUNT_GROUP"
 
             summary = (
                 f"Cluster {cluster_id} contains {len(accounts)} accounts, {len(transactions)} transactions, "
-                f"with ${total_amount:.2f} total value (${suspicious_amount:.2f} high-risk exposure). "
-                + (f"NetworkX discovered {len(shared_devices)} device collision(s) and {len(shared_identities)} shared card token(s) linking accounts." if is_coordinated else "Isolated legitimate consumer transactions.")
+                f"with ${total_amount:.2f} total transaction value (${flagged_transaction_value:.2f} value from transactions flagged by local rules). "
+                + (f"Local records share {len(shared_devices)} device record(s) and {len(shared_identities)} payment-identity record(s); this is a review signal, not proof of coordination." if is_coordinated else "No shared device or payment-identity record was found in this component.")
             )
 
             clusters.append({
@@ -361,7 +348,7 @@ class GraphIntelligenceEngine:
                 "shared_identities_count": len(shared_identities),
                 "shared_devices_count": len(shared_devices),
                 "total_transaction_value": round(total_amount, 2),
-                "suspicious_financial_exposure": round(suspicious_amount, 2),
+                "suspicious_financial_exposure": round(flagged_transaction_value, 2),
                 "total_exposure": round(total_amount, 2),
                 "evidence_count": suspicious_edges_count,
                 "summary": summary,
@@ -533,10 +520,8 @@ class GraphIntelligenceEngine:
                     "evidence_id": data.get("evidence_id"),
                     "is_suspicious": data.get("is_suspicious", False),
                     "suspicious_reason": data.get("suspicious_reason", ""),
-                    "confidence": data.get("confidence", 0.85),
-                    "risk_contribution": data.get("risk_contribution", "+15.0"),
                     "supporting_evidence": data.get("supporting_evidence", data.get("suspicious_reason", "")),
-                    "alternative_explanation": data.get("alternative_explanation", "Standard user interaction or benign infrastructure overlap."),
+                    "alternative_explanation": data.get("alternative_explanation", ""),
                     "timestamp": data.get("timestamp"),
                     "shared_indicator": data.get("shared_indicator"),
                     "attributes": {
@@ -544,9 +529,7 @@ class GraphIntelligenceEngine:
                         "relationship": data.get("relationship", "RELATED"),
                         "is_suspicious": data.get("is_suspicious", False),
                         "suspicious_reason": data.get("suspicious_reason", ""),
-                        "confidence": data.get("confidence", 0.85),
-                        "risk_contribution": data.get("risk_contribution", "+15.0")
-                    }
+                        }
                 })
                 edge_id_counter += 1
 

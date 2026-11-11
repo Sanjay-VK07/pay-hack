@@ -144,11 +144,11 @@ class InvestigationEvidence(Base):
     observed_value = Column(String(256), nullable=True)  # Actual observed value e.g. "4 transactions in 60 minutes"
     baseline_value = Column(String(256), nullable=True)  # Expected or baseline value e.g. "Max 1 transaction per 24 hours"
     severity = Column(String(32), default="MEDIUM")  # LOW, MEDIUM, HIGH, CRITICAL
-    confidence_score = Column(Float, default=0.95)  # 0.0 - 1.0 confidence
-    source_reliability = Column(String(64), default="HIGH - Verified Hardware / Network Telemetry")
-    corroboration_count = Column(Integer, default=1)  # Number of corroborating signals
+    confidence_score = Column(Float, nullable=True, default=None)  # Uncalibrated; absent unless explicitly supplied.
+    source_reliability = Column(String(64), nullable=True, default=None)
+    corroboration_count = Column(Integer, nullable=True, default=None)
     alternative_explanation = Column(Text, nullable=True)  # Plausible legitimate explanation
-    verification_status = Column(String(32), default="VERIFIED")  # VERIFIED, UNVERIFIED, CORROBORATED
+    verification_status = Column(String(32), nullable=True, default=None)
     explanation = Column(Text, nullable=True)  # Explanation of relevance to fraud
     related_transaction_id = Column(String(64), nullable=True, index=True)
     related_account_id = Column(String(64), nullable=True, index=True)
@@ -172,7 +172,7 @@ class AgentExecution(Base):
     execution_time_ms = Column(Integer, default=0)
     input_summary = Column(Text, nullable=True)
     findings = Column(Text, nullable=True)
-    confidence_score = Column(Float, default=0.0)
+    confidence_score = Column(Float, nullable=True, default=None)  # Not calibrated; omitted from current execution records.
     evidence_ids = Column(JSON, default=list)  # Evidence IDs backing the agent's findings
     output_json = Column(JSON, default=dict)
     error_message = Column(Text, nullable=True)

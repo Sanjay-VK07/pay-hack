@@ -82,7 +82,7 @@ def test_fifteen_step_fraud_investigation_and_safety_scenario(client):
         "Graph Intelligence Agent",
         "Fraud Investigation Agent",
         "Risk Assessment Agent",
-        "Autonomous Response Agent"
+        "Response Planning Agent"
     ]
     for expected in expected_agents:
         assert expected in agent_names, f"Missing agent: {expected}"
@@ -91,7 +91,7 @@ def test_fifteen_step_fraud_investigation_and_safety_scenario(client):
     for e in executions:
         assert e["execution_time_ms"] > 0
         assert e["status"] == "COMPLETED"
-        assert e["confidence_score"] > 0.8
+        assert e.get("confidence_score") is None
         assert e["findings"] is not None
 
     # STEP 7: Generate evidence-backed risk assessment

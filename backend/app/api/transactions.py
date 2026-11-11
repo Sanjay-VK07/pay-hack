@@ -1,9 +1,10 @@
 import uuid
 from typing import List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.security.auth import verify_mutation_auth
 from app.models.models import Transaction, CustomerAccount, Device, PaymentIdentity, TransactionIndicator, AuditLog
 from app.schemas.schemas import (
     TransactionSchema, TransactionIngestSchema, TransactionDetailSchema,
@@ -142,7 +143,11 @@ def get_transaction(transaction_id: str, db: Session = Depends(get_db)):
     )
 
 @router.post("/ingest", response_model=TransactionSchema)
-def ingest_transaction(payload: TransactionIngestSchema, db: Session = Depends(get_db)):
+def ingest_transaction(
+    payload: TransactionIngestSchema,
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     tx_id = f"TXN_{uuid.uuid4().hex[:8].upper()}"
 
     # Handle device
@@ -236,7 +241,11 @@ def ingest_transaction(payload: TransactionIngestSchema, db: Session = Depends(g
     )
 
 @router.post("/{transaction_id}/analyze")
-def analyze_transaction(transaction_id: str, db: Session = Depends(get_db)):
+def analyze_transaction(
+    transaction_id: str,
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     orchestrator = MultiAgentOrchestrator(db)
     result = orchestrator.run_investigation(transaction_id=transaction_id)
     return result

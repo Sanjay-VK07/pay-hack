@@ -1,9 +1,10 @@
 import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.security.auth import verify_mutation_auth
 from app.models.models import (
     InvestigationCase, Transaction, CustomerAccount, ApprovalRequest, AuditLog, PaymentOperation
 )
@@ -120,34 +121,23 @@ def get_investigation_case(case_id: str, db: Session = Depends(get_db)):
 
     approval_integrity_valid, approval_integrity_warning = approval_integrity_state(db, case, req)
 
-    # Retrieve or build deterministic scoring details
+    # Only expose a scoring breakdown that was persisted by an investigation run.
     latest_ra = case.risk_assessments[-1] if case.risk_assessments else None
-    if latest_ra and latest_ra.scoring_details and isinstance(latest_ra.scoring_details, dict) and latest_ra.scoring_details.get("contributing_factors"):
+    if (
+        latest_ra
+        and isinstance(latest_ra.scoring_details, dict)
+        and latest_ra.scoring_details.get("calculation_version") == "heuristic_v2"
+    ):
         scoring_details = latest_ra.scoring_details
     else:
-        factors = [
-            {"factor": "Known Fraud Fingerprint (Emulator)", "weight": 40.0, "category": "DEVICE_INTELLIGENCE", "share": "22.0%", "rationale": "High-confidence virtualized execution environment signature."},
-            {"factor": "Coordinated Synthetic Fraud Ring", "weight": 35.0, "category": "GRAPH_INTELLIGENCE", "share": "19.2%", "rationale": "Graph entity linking 4+ customer accounts sharing payment hashes."},
-            {"factor": "Abnormal Transaction Velocity", "weight": 25.0, "category": "BEHAVIORAL_ANOMALY", "share": "13.7%", "rationale": "4 rapid payment authorizations within 60 minutes vs baseline of 1/day."},
-            {"factor": "High Value Deviation", "weight": 25.0, "category": "TRANSACTION_RISK", "share": "13.7%", "rationale": "Transaction amount exceeds 95th percentile merchant category threshold."},
-            {"factor": "Shared Stolen Payment Instrument", "weight": 30.0, "category": "PAYMENT_INTELLIGENCE", "share": "16.5%", "rationale": "Card token registered across multiple mismatched identity records."},
-            {"factor": "Cross-Account IP Hopping", "weight": 15.0, "category": "NETWORK_TELEMETRY", "share": "8.2%", "rationale": "VPN datacenter egress IP utilized across disjoint customer profiles."},
-            {"factor": "Account Age Anomaly", "weight": 12.0, "category": "IDENTITY_RISK", "share": "6.6%", "rationale": "Brand new account (<48 hrs) executing maximum volume ceiling."}
-        ]
-        raw_sum = sum(f["weight"] for f in factors)
-        scoring_details = {
-            "deterministic_formula": "Risk_Score = min(100.0, sum(factor_weights))",
-            "raw_sum_of_weights": raw_sum,
-            "clamped_risk_score": min(100.0, raw_sum),
-            "excess_weight_clamped": max(0.0, raw_sum - 100.0),
-            "contributing_factors": factors,
-            "formula_explanation": "Each corroborated evidence item contributes an additive risk weight. The final score is clamped at 100.0 to represent maximum systemic risk without arbitrary inflation."
-        }
+        scoring_details = {}
 
-    # Build PayPal Verification metadata (Strict data integrity: never fabricate captures when none exist)
+    # Report the local payment record only. This GET does not query PayPal.
     if linked_payment and linked_payment.capture_id:
         is_sim = linked_payment.is_simulated
         refundable_bal = 0.0 if linked_payment.refund_status == "COMPLETED" else linked_payment.amount
+        refund_response = linked_payment.raw_response or {}
+        recorded_refund_id = refund_response.get("id") or refund_response.get("refund_id")
         paypal_verification = {
             "capture_id": linked_payment.capture_id,
             "status": linked_payment.payment_status,
@@ -155,27 +145,26 @@ def get_investigation_case(case_id: str, db: Session = Depends(get_db)):
             "currency": linked_payment.currency,
             "refundable_balance": refundable_bal,
             "is_simulated": is_sim,
-            "integration_mode": "LIVE_PAYPAL_SANDBOX" if not is_sim else "SIMULATED_SANDBOX",
-            "verification_source": "PAYPAL_SANDBOX_V2_PAYMENTS_CAPTURES" if not is_sim else "PAYPAL_SANDBOX_SIMULATOR_TELEMETRY",
+            "integration_mode": "SIMULATED_SANDBOX" if is_sim else "PAYPAL_API_RECORD_NOT_REVERIFIED",
+            "verification_source": "LOCAL_SIMULATED_PAYMENT_RECORD" if is_sim else "LOCAL_PAYMENT_OPERATION_RECORD",
             "transaction_ref_matches": bool(linked_payment.transaction_ref == case.primary_transaction_id),
             "has_previous_refund": bool(linked_payment.refund_status == "COMPLETED"),
             "previous_refunds": [
                 {
-                    "refund_id": linked_payment.idempotency_key,
+                    "refund_id": recorded_refund_id,
                     "amount": linked_payment.amount,
                     "currency": linked_payment.currency,
                     "status": "COMPLETED",
-                    "refunded_at": linked_payment.updated_at.isoformat() if linked_payment.updated_at else utcnow().isoformat()
+                    "refunded_at": linked_payment.updated_at.isoformat() if linked_payment.updated_at else None
                 }
             ] if linked_payment.refund_status == "COMPLETED" else [],
-            "seller_protection": "ELIGIBLE",
+            "seller_protection": "NOT_CHECKED",
             "eligible_for_refund": bool(
                 linked_payment.capture_id
                 and len(linked_payment.capture_id) >= 8
                 and linked_payment.payment_status in ("COMPLETED", "CAPTURED")
                 and linked_payment.refund_status not in ("COMPLETED", "PROCESSING")
             ),
-            "verified_at": utcnow().isoformat()
         }
     else:
         paypal_verification = {
@@ -185,161 +174,99 @@ def get_investigation_case(case_id: str, db: Session = Depends(get_db)):
             "currency": txn.currency if txn else (linked_payment.currency if linked_payment else "USD"),
             "refundable_balance": 0.0,
             "is_simulated": linked_payment.is_simulated if linked_payment else False,
-            "integration_mode": "NONE" if not linked_payment else ("SIMULATED_SANDBOX" if linked_payment.is_simulated else "LIVE_PAYPAL_SANDBOX"),
-            "verification_source": "NO_SETTLED_PAYMENT_RECORD" if not linked_payment else "PAYPAL_AUTHORIZATION_NO_CAPTURE",
+            "integration_mode": "NONE" if not linked_payment else ("SIMULATED_SANDBOX" if linked_payment.is_simulated else "PAYPAL_API_RECORD_NOT_REVERIFIED"),
+            "verification_source": "NO_PAYMENT_OPERATION_RECORD" if not linked_payment else "LOCAL_PAYMENT_OPERATION_WITHOUT_CAPTURE",
             "transaction_ref_matches": bool(linked_payment and linked_payment.transaction_ref == case.primary_transaction_id),
             "has_previous_refund": False,
             "previous_refunds": [],
-            "seller_protection": "INELIGIBLE_NO_CAPTURE",
+            "seller_protection": "NOT_CHECKED_NO_CAPTURE",
             "eligible_for_refund": False,
-            "verified_at": utcnow().isoformat()
         }
 
-    # Build 8-Stage Agent Reasoning Timeline
-    tx_time_str = txn.created_at.isoformat() if txn and txn.created_at else case.created_at.isoformat()
-    case_time_str = case.created_at.isoformat() if case.created_at else utcnow().isoformat()
-    approval_time_str = req.resolved_at.isoformat() if (req and req.resolved_at) else case.updated_at.isoformat()
-    payment_time_str = linked_payment.updated_at.isoformat() if linked_payment and linked_payment.updated_at else case.updated_at.isoformat()
-
-    identity_execution = next(
-        (execution for execution in reversed(case.agent_executions) if execution.stage == "IDENTITY_INTEL"),
-        None,
-    )
-    identity_output = (identity_execution.output_json or {}) if identity_execution else {}
-    identity_findings = identity_output.get("findings") or {}
     device = txn.device if txn else None
-    # The transaction's linked Device row is the source of truth. Agent
-    # executions are persisted snapshots and can contain an older or
-    # malformed fingerprint from before the device relationship was fixed.
-    canonical_fingerprint = (
-        device.device_fingerprint if device else identity_findings.get("device_fingerprint")
-    )
-    identity_summary = (identity_execution.findings if identity_execution else None) or (
-        f"No device record is linked to transaction {txn.id}." if txn and not device
-        else f"Device fingerprint {canonical_fingerprint} was evaluated by the deterministic identity agent."
-    )
-    recorded_fingerprint = identity_findings.get("device_fingerprint")
-    if (
-        device
-        and recorded_fingerprint
-        and recorded_fingerprint != canonical_fingerprint
-        and recorded_fingerprint in identity_summary
-    ):
-        identity_summary = identity_summary.replace(recorded_fingerprint, canonical_fingerprint)
-    if canonical_fingerprint and canonical_fingerprint not in identity_summary:
-        identity_summary = f"{identity_summary} Canonical device fingerprint: {canonical_fingerprint}."
+    canonical_fingerprint = device.device_fingerprint if device else None
 
-    timeline = [
-        {
-            "stage_number": 1,
-            "stage_name": "Transaction Anomaly Detected",
-            "actor": "Transaction Intelligence Agent",
-            "status": "COMPLETED",
-            "timestamp": tx_time_str,
-            "summary": f"Transaction of ${txn.amount if txn else 2890.0:.2f} flagged with high anomaly score (0.94) at merchant {txn.merchant_name if txn else 'Global Marketplace'}.",
-            "evidence_refs": [e.id for e in case.evidence if "AMOUNT" in e.evidence_type or "VELOCITY" in e.evidence_type],
-            "raw_data": {"amount": txn.amount if txn else 0.0, "merchant": txn.merchant_name if txn else "Unknown"}
-        },
-        {
-            "stage_number": 2,
-            "stage_name": "Identity Indicators Examined",
-            "actor": "Identity Intelligence Agent",
-            "status": "COMPLETED",
-            "timestamp": case_time_str,
-            "summary": identity_summary,
-            "evidence_refs": [e.id for e in case.evidence if "DEVICE" in e.evidence_type or "PAYMENT" in e.evidence_type],
-            "raw_data": {
-                **identity_output,
+    # Build a timeline only from persisted records. A case read must not invent
+    # completed agent stages, timestamps, reviewer decisions, or PayPal activity.
+    timeline_events = []
+
+    for execution in sorted(
+        case.agent_executions,
+        key=lambda item: item.started_at.isoformat() if item.started_at else "",
+    ):
+        summary = execution.findings or "No findings were stored for this execution."
+        output_json = execution.output_json or {}
+        if execution.stage == "IDENTITY_INTEL" and device and canonical_fingerprint:
+            old_fingerprint = (output_json.get("findings") or {}).get("device_fingerprint")
+            if old_fingerprint and old_fingerprint != canonical_fingerprint and old_fingerprint in summary:
+                summary = summary.replace(old_fingerprint, canonical_fingerprint)
+            if canonical_fingerprint not in summary:
+                summary = f"{summary} Linked device record fingerprint: {canonical_fingerprint}."
+            output_json = {
+                **output_json,
                 "findings": {
-                    **identity_findings,
+                    **(output_json.get("findings") or {}),
                     "device_fingerprint": canonical_fingerprint,
-                    "is_emulator": identity_findings.get("is_emulator", device.is_emulator if device else None),
                 },
             }
-        },
-        {
-            "stage_number": 3,
-            "stage_name": "Graph Relationships Discovered",
-            "actor": "Graph Network Intelligence Agent",
-            "status": "COMPLETED",
-            "timestamp": case_time_str,
-            "summary": f"NetworkX graph traversal uncovered coordinated fraud cluster {case.fraud_cluster_id or 'FC-SYNTH-01'} spanning {len(case.related_accounts or [1,2,3,4])} connected accounts.",
-            "evidence_refs": [e.id for e in case.evidence if "GRAPH" in e.evidence_type or "SHARED" in e.evidence_type or "CLUSTER" in e.evidence_type],
-            "raw_data": {"cluster_id": case.fraud_cluster_id, "accounts_count": len(case.related_accounts or [])}
-        },
-        {
-            "stage_number": 4,
-            "stage_name": "Evidence Corroborated",
-            "actor": "Fraud Investigation Agent",
-            "status": "COMPLETED",
-            "timestamp": case_time_str,
-            "summary": f"{len(case.evidence)} forensic signals verified with alternative non-fraud hypotheses systematically evaluated.",
-            "evidence_refs": [e.id for e in case.evidence],
-            "raw_data": {"corroborated_count": len(case.evidence), "all_verified": True}
-        },
-        {
-            "stage_number": 5,
-            "stage_name": "Risk Score Calculated",
-            "actor": "Risk Assessment Agent",
-            "status": "COMPLETED",
-            "timestamp": case_time_str,
-            "summary": f"Deterministic risk score computed: 100.0/100 (Raw Factor Sum: {scoring_details['raw_sum_of_weights']:.1f}, Clamped at ceiling).",
-            "evidence_refs": latest_ra.evidence_ids if latest_ra else [],
-            "raw_data": scoring_details
-        },
-        {
-            "stage_number": 6,
-            "stage_name": "Recommended Action Generated",
-            "actor": "Autonomous Response Agent",
-            "status": "COMPLETED",
-            "timestamp": case_time_str,
-            "summary": f"Recommended action: {case.recommended_action}. Automated reversal proposal staged for Human-in-the-Loop review.",
+        event_time = execution.completed_at or execution.started_at
+        timeline_events.append({
+            "sort_time": event_time.isoformat() if event_time else "",
+            "stage_name": execution.stage.replace("_", " ").title(),
+            "actor": execution.agent_name,
+            "status": execution.status,
+            "timestamp": event_time.isoformat() if event_time else None,
+            "summary": summary,
+            "evidence_refs": execution.evidence_ids or [],
+            "raw_data": output_json,
+        })
+
+    if req:
+        request_time = req.resolved_at or req.created_at
+        timeline_events.append({
+            "sort_time": request_time.isoformat() if request_time else "",
+            "stage_name": "Human Review",
+            "actor": req.approved_by or "Reviewer name not recorded",
+            "status": req.status,
+            "timestamp": request_time.isoformat() if request_time else None,
+            "summary": req.reason or "No reviewer reason was recorded.",
             "evidence_refs": [],
-            "raw_data": {"recommended_action": case.recommended_action}
-        },
-        {
-            "stage_number": 7,
-            "stage_name": "Human Approval Requested",
-            "actor": req.approved_by if (req and req.approved_by) else "Senior Fraud Officer",
-            "status": "COMPLETED" if case.status in ("APPROVED", "ACTION_QUEUED", "ACTION_EXECUTING", "ACTION_COMPLETED") else ("REJECTED" if case.status == "REJECTED" else "PENDING"),
-            "timestamp": approval_time_str,
+            "raw_data": {"approval_status": req.status, "approver": req.approved_by},
+        })
+
+    if linked_payment:
+        payment_time = linked_payment.updated_at
+        timeline_events.append({
+            "sort_time": payment_time.isoformat() if payment_time else "",
+            "stage_name": "Payment Operation Record",
+            "actor": "Local payment ledger",
+            "status": "SIMULATED_RECORD" if linked_payment.is_simulated else "LOCAL_RECORD_NOT_REVERIFIED",
+            "timestamp": payment_time.isoformat() if payment_time else None,
             "summary": (
-                approval_integrity_warning
-                if approval_integrity_warning
-                else f"Decision: {case.approval_status}. Operation Ref: {req.operation_reference if (req and req.operation_reference) else 'PENDING_HUMAN_AUTH'}."
-            ) if case.approval_status != "PENDING" else "Awaiting authorized investigator sign-off before financial operations can execute.",
-            "evidence_refs": [],
-            "raw_data": {"approval_status": case.approval_status, "approver": req.approved_by if req else None}
-        },
-        {
-            "stage_number": 8,
-            "stage_name": "PayPal Operation Executed",
-            "actor": "PayPal Sandbox Gateway",
-            "status": "COMPLETED" if (linked_payment and linked_payment.refund_status == "COMPLETED") else (
-                "NOT_ELIGIBLE_NO_CAPTURE" if (not linked_payment or not linked_payment.capture_id or linked_payment.payment_status == "UNCAPTURED") else (
-                    "REJECTED" if case.status == "REJECTED" else (
-                        "PENDING_APPROVAL" if case.status in ("PENDING_REVIEW", "DETECTED", "INVESTIGATING") else "PENDING_EXECUTION"
-                    )
-                )
-            ),
-            "timestamp": payment_time_str if (linked_payment and linked_payment.refund_status == "COMPLETED") else (approval_time_str or case_time_str),
-            "summary": (
-                f"Refund of ${linked_payment.amount:.2f} executed via {'PayPal Sandbox' if not linked_payment.is_simulated else 'Verified Sandbox Simulator'}. Capture ID: {linked_payment.capture_id}."
-                if (linked_payment and linked_payment.refund_status == "COMPLETED")
-                else (
-                    "No settled PayPal capture record exists for this transaction. Authorization was never captured; financial remediation reversal cannot be executed."
-                    if (not linked_payment or not linked_payment.capture_id or linked_payment.payment_status == "UNCAPTURED")
-                    else (
-                        "Payment operation blocked by human rejection."
-                        if case.status == "REJECTED"
-                        else f"Financial reversal gated pending explicit human authorization for Capture {linked_payment.capture_id}."
-                    )
-                )
+                f"Local record status: {linked_payment.payment_status}; refund status: "
+                f"{linked_payment.refund_status}; capture reference: {linked_payment.capture_id or 'none'}. "
+                "This case-details request did not query PayPal or execute a payment action."
             ),
             "evidence_refs": [],
-            "raw_data": paypal_verification
-        }
-    ]
+            "raw_data": {"payment_id": linked_payment.id, "is_simulated": linked_payment.is_simulated},
+        })
+
+    if not timeline_events:
+        timeline_events.append({
+            "sort_time": case.created_at.isoformat() if case.created_at else "",
+            "stage_name": "Case Record",
+            "actor": "Investigation ledger",
+            "status": case.status,
+            "timestamp": case.created_at.isoformat() if case.created_at else None,
+            "summary": case.summary or "No investigation execution or reviewer activity is recorded for this case.",
+            "evidence_refs": [],
+            "raw_data": {"case_id": case.id, "case_status": case.status},
+        })
+
+    timeline = []
+    for index, event in enumerate(sorted(timeline_events, key=lambda item: item["sort_time"]), start=1):
+        event.pop("sort_time", None)
+        timeline.append({"stage_number": index, **event})
 
     # Format output according to schema
     case_dict = {
@@ -389,7 +316,11 @@ def get_investigation_case(case_id: str, db: Session = Depends(get_db)):
     return case_dict
 
 @router.post("/{case_id}/run")
-def run_case_investigation(case_id: str, db: Session = Depends(get_db)):
+def run_case_investigation(
+    case_id: str,
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     case = db.query(InvestigationCase).filter(InvestigationCase.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
@@ -405,22 +336,85 @@ def run_case_investigation(case_id: str, db: Session = Depends(get_db)):
     result = orchestrator.run_investigation(transaction_id=case.primary_transaction_id, force_new_case=False)
     return result
 
-@router.post("/{case_id}/approve")
-def approve_case_action(case_id: str, payload: CaseApprovalAction, db: Session = Depends(get_db)):
+@router.post("/{case_id}/approve", summary="Human Review: Approve Case")
+def approve_case_action(
+    case_id: str,
+    payload: CaseApprovalAction,
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
+    """
+    Records the named human reviewer's approval decision for an investigation case.
+
+    Protected by mutation authentication guard (API key or loopback-only demo).
+    """
     case = db.query(InvestigationCase).filter(InvestigationCase.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
 
-    # State Transition Check
-    if case.status not in ALLOWED_TRANSITIONS.get("PENDING_REVIEW", set()).union({"PENDING_REVIEW", "DETECTED", "INVESTIGATING", "ACTION_FAILED"}):
-        if case.status == "APPROVED":
-            # Idempotent response
-            return {
-                "status": "SUCCESS",
-                "case_id": case.id,
-                "approval_status": "APPROVED",
-                "message": "Case was already approved."
+    # Terminal or downstream state check: cannot re-approve an already executed or closed case
+    if case.status in ("ACTION_COMPLETED", "CLOSED", "REJECTED"):
+        db.add(AuditLog(
+            id=f"AUD_{utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}_REJ_TRANS",
+            case_id=case.id,
+            transaction_id=case.primary_transaction_id,
+            event_type="TRANSITION_REJECTED",
+            actor=payload.investigator_name,
+            previous_state=case.status,
+            new_state=case.status,
+            api_ref="/api/investigations/approve",
+            details={
+                "attempted_transition": "APPROVED",
+                "current_status": case.status,
+                "reason": f"Cannot transition to APPROVED from status '{case.status}'."
             }
+        ))
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid state transition: Cannot approve case in '{case.status}' status."
+        )
+
+    # Idempotent response for currently approved cases
+    if case.status == "APPROVED":
+        db.add(AuditLog(
+            id=f"AUD_{utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}_DUP_APP",
+            case_id=case.id,
+            transaction_id=case.primary_transaction_id,
+            event_type="DUPLICATE_APPROVAL_ATTEMPTED",
+            actor=payload.investigator_name,
+            previous_state=case.status,
+            new_state=case.status,
+            api_ref="/api/investigations/approve",
+            details={"reason": payload.reason, "message": "Case was already approved; duplicate request audited."}
+        ))
+        db.commit()
+        return {
+            "status": "SUCCESS",
+            "case_id": case.id,
+            "approval_status": "APPROVED",
+            "message": "Case was already approved."
+        }
+
+    # State Transition Check
+    valid_prior_states = {"PENDING_REVIEW", "DETECTED", "INVESTIGATING", "ACTION_FAILED"}
+    if case.status not in valid_prior_states:
+        db.add(AuditLog(
+            id=f"AUD_{utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}_REJ_TRANS",
+            case_id=case.id,
+            transaction_id=case.primary_transaction_id,
+            event_type="TRANSITION_REJECTED",
+            actor=payload.investigator_name,
+            previous_state=case.status,
+            new_state=case.status,
+            api_ref="/api/investigations/approve",
+            details={
+                "attempted_transition": "APPROVED",
+                "current_status": case.status,
+                "reason": f"Cannot transition to APPROVED from status '{case.status}'."
+            }
+        ))
+        db.commit()
         raise HTTPException(
             status_code=400,
             detail=f"Invalid state transition: Cannot approve case in '{case.status}' status."
@@ -440,7 +434,7 @@ def approve_case_action(case_id: str, payload: CaseApprovalAction, db: Session =
             case_id=case.id,
             action_type=f"EXECUTE_{case.recommended_action}",
             status="APPROVED",
-            requested_by="Autonomous Response Agent",
+            requested_by="Response Planning Agent",
             approved_by=payload.investigator_name,
             operation_reference=op_ref,
             reason=payload.reason,
@@ -455,9 +449,13 @@ def approve_case_action(case_id: str, payload: CaseApprovalAction, db: Session =
         req.reason = payload.reason
 
     # Synchronize linked Payment Operation approval status
+    # Only mark payment APPROVED if it has a verified capture; uncaptured authorizations cannot be approved for refund
     linked_payment = find_payment_for_case(db, case.id, case.primary_transaction_id)
     if linked_payment:
-        linked_payment.approval_status = "APPROVED"
+        if linked_payment.capture_id and linked_payment.payment_status in ("COMPLETED", "CAPTURED"):
+            linked_payment.approval_status = "APPROVED"
+        else:
+            linked_payment.approval_status = "INELIGIBLE" if linked_payment.refund_status == "INELIGIBLE" else "PENDING"
         linked_payment.updated_at = utcnow()
 
     # Audit Log
@@ -489,11 +487,67 @@ def approve_case_action(case_id: str, payload: CaseApprovalAction, db: Session =
         "message": f"Action {case.recommended_action} approved by {payload.investigator_name}."
     }
 
-@router.post("/{case_id}/reject")
-def reject_case_action(case_id: str, payload: CaseApprovalAction, db: Session = Depends(get_db)):
+@router.post("/{case_id}/reject", summary="Human Review: Reject Case")
+def reject_case_action(
+    case_id: str,
+    payload: CaseApprovalAction,
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
+    """
+    Records the named human reviewer's rejection decision for an investigation case.
+
+    Protected by mutation authentication guard (API key or loopback-only demo).
+    """
     case = db.query(InvestigationCase).filter(InvestigationCase.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail=f"Investigation case '{case_id}' not found")
+
+    # Idempotent response for already-rejected cases
+    if case.status == "REJECTED" or case.approval_status == "REJECTED":
+        db.add(AuditLog(
+            id=f"AUD_{utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}_DUP_REJ",
+            case_id=case.id,
+            transaction_id=case.primary_transaction_id,
+            event_type="DUPLICATE_REJECTION_ATTEMPTED",
+            actor=payload.investigator_name,
+            previous_state=case.status,
+            new_state=case.status,
+            api_ref="/api/investigations/reject",
+            details={"reason": payload.reason, "message": "Case was already rejected; duplicate request audited."}
+        ))
+        db.commit()
+        return {
+            "status": "SUCCESS",
+            "case_id": case.id,
+            "approval_status": "REJECTED",
+            "rejected_by": payload.investigator_name,
+            "message": "Case was already rejected."
+        }
+
+    # State Transition Check
+    valid_prior_states = {"PENDING_REVIEW", "DETECTED", "INVESTIGATING", "ACTION_FAILED"}
+    if case.status not in valid_prior_states:
+        db.add(AuditLog(
+            id=f"AUD_{utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}_REJ_TRANS",
+            case_id=case.id,
+            transaction_id=case.primary_transaction_id,
+            event_type="TRANSITION_REJECTED",
+            actor=payload.investigator_name,
+            previous_state=case.status,
+            new_state=case.status,
+            api_ref="/api/investigations/reject",
+            details={
+                "attempted_transition": "REJECTED",
+                "current_status": case.status,
+                "reason": f"Cannot transition to REJECTED from status '{case.status}'."
+            }
+        ))
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid state transition: Cannot reject case in '{case.status}' status."
+        )
 
     previous_state = case.status
     case.approval_status = "REJECTED"

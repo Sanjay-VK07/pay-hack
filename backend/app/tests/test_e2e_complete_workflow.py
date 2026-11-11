@@ -65,7 +65,7 @@ def test_complete_ten_step_workflow():
         assert len(executions) == 6  # Txn, Identity, Graph, Investigation, Risk, Response
         for ex in executions:
             assert ex["status"] == "COMPLETED"
-            assert ex["confidence_score"] >= 0.90
+            assert ex.get("confidence_score") is None
         print(f"✓ STEP 5: All 6 specialized AI agents successfully executed for case {case_id}.")
 
         # STEP 6: Generate an Evidence-Based Risk Assessment
@@ -136,7 +136,7 @@ def test_complete_ten_step_workflow():
         assert "HUMAN_APPROVAL_GRANTED" in event_types
         assert "SIMULATED_REFUND_EXECUTED" in event_types or "PAYPAL_REFUND_CONFIRMED" in event_types
         assert "MULTI_AGENT_INVESTIGATION" in event_types
-        print(f"✓ STEP 10: Dashboard metrics & immutable audit trail verified ({len(audit_trail)} persisted audit events).")
+        print(f"✓ STEP 10: Dashboard metrics & chronological audit trail verified ({len(audit_trail)} persisted audit events).")
 
         print("\n=======================================================")
         print("ALL 10 STEPS OF THE HACKATHON WORKFLOW PASSED FLAWLESSLY!")

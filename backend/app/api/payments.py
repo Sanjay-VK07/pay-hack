@@ -1,11 +1,12 @@
 import uuid
 from typing import List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Security
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.config import settings
+from app.security.auth import verify_mutation_auth
 from app.models.models import PaymentOperation, InvestigationCase, AuditLog, Transaction
 from app.schemas.schemas import PaymentOperationSchema, RefundRequestSchema, CreateOrderSchema
 from app.paypal.client import PayPalClient
@@ -13,6 +14,7 @@ from app.paypal.orders import PayPalOrders
 from app.paypal.refunds import PayPalRefunds
 from app.paypal.simulator import PayPalSimulator
 from app.services.payment_links import find_payment_for_case
+from app.services.approval_integrity import approval_integrity_state
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -38,7 +40,11 @@ def _find_payment_identifier(db: Session, identifier: str) -> Optional[PaymentOp
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
 @router.post("/{payment_id}/refund/verify")
-def verify_refund_status(payment_id: str, db: Session = Depends(get_db)):
+def verify_refund_status(
+    payment_id: str,
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     """Check the status of an existing live PayPal refund without issuing one."""
     payment = db.query(PaymentOperation).filter(PaymentOperation.id == payment_id).first()
     if not payment:
@@ -122,13 +128,18 @@ def list_payments(
     return ops
 
 @router.post("/orders/create")
-def create_paypal_order(payload: CreateOrderSchema, db: Session = Depends(get_db)):
+def create_paypal_order(
+    payload: CreateOrderSchema,
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     """
     Creates a PayPal Sandbox Order with CAPTURE intent or clearly labeled simulator order.
     """
     has_live_creds = bool(settings.PAYPAL_CLIENT_ID and settings.PAYPAL_CLIENT_SECRET)
     idempotency_key = f"ORD_{uuid.uuid4().hex[:12]}"
     tx_ref = payload.transaction_ref or f"TXN_{uuid.uuid4().hex[:8].upper()}"
+    case = None
     if payload.case_id:
         case = db.query(InvestigationCase).filter(InvestigationCase.id == payload.case_id).first()
         if not case:
@@ -165,7 +176,7 @@ def create_paypal_order(payload: CreateOrderSchema, db: Session = Depends(get_db
         currency=payload.currency,
         payment_status="CREATED",
         refund_status="NONE",
-        approval_status="APPROVED",
+        approval_status="PENDING",
         operation_type="PAYPAL_CHECKOUT_ORDER",
         idempotency_key=idempotency_key,
         raw_response=result,
@@ -194,10 +205,17 @@ def create_paypal_order(payload: CreateOrderSchema, db: Session = Depends(get_db
     db.add(audit)
     db.commit()
 
+    approve_url = None
+    if isinstance(result, dict):
+        for link in result.get("links", []):
+            if isinstance(link, dict) and link.get("rel") == "approve":
+                approve_url = link.get("href")
+
     return {
         "status": "SUCCESS",
         "payment_id": op.id,
         "paypal_order_id": order_id,
+        "approve_url": approve_url,
         "transaction_ref": tx_ref,
         "amount": payload.amount,
         "currency": payload.currency,
@@ -207,7 +225,11 @@ def create_paypal_order(payload: CreateOrderSchema, db: Session = Depends(get_db
     }
 
 @router.post("/orders/{order_id}/capture")
-def capture_paypal_order(order_id: str, db: Session = Depends(get_db)):
+def capture_paypal_order(
+    order_id: str,
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
+):
     """
     Captures an authorized PayPal Sandbox Order or verified simulator order.
     """
@@ -226,6 +248,25 @@ def capture_paypal_order(order_id: str, db: Session = Depends(get_db)):
         }
     if payment.payment_status != "CREATED":
         raise HTTPException(status_code=409, detail=f"Order cannot be captured from payment status '{payment.payment_status}'.")
+    if payment.approval_status != "APPROVED" or not payment.case_id:
+        raise HTTPException(status_code=403, detail="Capture blocked: a linked investigation case must be approved by a reviewer first.")
+    case = db.query(InvestigationCase).filter(InvestigationCase.id == payment.case_id).first()
+    if not case or case.status != "APPROVED" or case.approval_status != "APPROVED":
+        raise HTTPException(status_code=403, detail="Capture blocked: the linked investigation case is not approved.")
+    if case.primary_transaction_id != payment.transaction_ref:
+        raise HTTPException(status_code=409, detail="Capture blocked: payment transaction reference does not match the linked case.")
+
+    # Cross-record validation
+    txn = db.query(Transaction).filter(Transaction.id == payment.transaction_ref).first()
+    if txn:
+        if txn.currency.upper() != payment.currency.upper():
+            raise HTTPException(status_code=409, detail=f"Capture blocked: Currency mismatch between transaction ({txn.currency}) and payment ({payment.currency}).")
+        if abs(txn.amount - payment.amount) >= 0.005:
+            raise HTTPException(status_code=409, detail=f"Capture blocked: Amount mismatch between transaction (${txn.amount:.2f}) and payment (${payment.amount:.2f}).")
+
+    valid_integrity, integrity_warning = approval_integrity_state(db, case)
+    if not valid_integrity:
+        raise HTTPException(status_code=409, detail=f"Capture blocked: Record consistency check failed: {integrity_warning}")
     has_live_creds = bool(settings.PAYPAL_CLIENT_ID and settings.PAYPAL_CLIENT_SECRET)
     is_live_call = not payment.is_simulated
     if is_live_call and not has_live_creds:
@@ -241,6 +282,7 @@ def capture_paypal_order(order_id: str, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail=f"PayPal Order Capture Error: {err}")
         
         capture_id = None
+        captures = []
         try:
             captures = result.get("purchase_units", [])[0].get("payments", {}).get("captures", [])
             if captures:
@@ -249,6 +291,21 @@ def capture_paypal_order(order_id: str, db: Session = Depends(get_db)):
             pass
         if not capture_id or result.get("status") != "COMPLETED":
             raise HTTPException(status_code=400, detail="PayPal did not confirm a completed capture with a capture reference.")
+
+        # Verify capture details: status, amount, currency matching
+        capture_obj = captures[0] if captures else {}
+        if capture_obj.get("status") and capture_obj.get("status") != "COMPLETED":
+            raise HTTPException(status_code=400, detail=f"PayPal capture status is '{capture_obj.get('status')}', expected 'COMPLETED'.")
+        cap_amt = (capture_obj.get("amount") or {}).get("value")
+        if cap_amt is not None:
+            try:
+                if abs(float(cap_amt) - float(payment.amount)) >= 0.005:
+                    raise HTTPException(status_code=400, detail=f"Captured amount (${float(cap_amt):.2f}) does not match payment order amount (${payment.amount:.2f}).")
+            except (ValueError, TypeError):
+                pass
+        cap_curr = (capture_obj.get("amount") or {}).get("currency_code")
+        if cap_curr and cap_curr.upper() != payment.currency.upper():
+            raise HTTPException(status_code=400, detail=f"Captured currency '{cap_curr}' does not match payment currency '{payment.currency}'.")
         is_sim = False
     else:
         simulator = PayPalSimulator()
@@ -368,11 +425,11 @@ def verify_payment_capture(payment_id: str, db: Session = Depends(get_db)):
     previous_refunds = []
     if payment.refund_status == "COMPLETED":
         previous_refunds.append({
-            "refund_id": payment.raw_response.get("id") or payment.raw_response.get("refund_id") or f"REF-{payment.capture_id}",
+            "refund_id": payment.raw_response.get("id") or payment.raw_response.get("refund_id"),
             "amount": payment.amount,
             "currency": payment.currency,
             "status": "COMPLETED",
-            "refunded_at": payment.updated_at.isoformat() if payment.updated_at else utcnow().isoformat()
+            "refunded_at": payment.updated_at.isoformat() if payment.updated_at else None
         })
 
     return {
@@ -402,12 +459,19 @@ def verify_payment_capture(payment_id: str, db: Session = Depends(get_db)):
         "verified_at": utcnow().isoformat()
     }
 
-@router.post("/{payment_id}/refund")
+@router.post("/{payment_id}/refund", summary="Execute Refund (Human-approved, loopback-only)")
 def execute_refund(
     payment_id: str,
-    payload: Optional[RefundRequestSchema] = None,
-    db: Session = Depends(get_db)
+    payload: RefundRequestSchema,
+    db: Session = Depends(get_db),
+    auth: dict = Security(verify_mutation_auth),
 ):
+    """
+    Executes an idempotent refund for a captured PayPal payment that has
+    received explicit human approval in the Investigation Workspace.
+
+    Protected by mutation authentication guard (API key or loopback-only demo).
+    """
     # Step 1: Verify that the PayPal payment exists
     payment = db.query(PaymentOperation).filter(PaymentOperation.id == payment_id).first()
     if not payment:
@@ -444,33 +508,55 @@ def execute_refund(
     if not is_valid_capture_id(payment.capture_id):
         raise HTTPException(status_code=400, detail="Refund rejected: The recorded capture reference is malformed.")
 
-    # Step 4: Verify the refundable amount
+    # Step 4: Verify the refundable amount and currency
     refund_amount = payload.amount if (payload and payload.amount is not None) else payment.amount
     if refund_amount <= 0 or refund_amount > payment.amount:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid refund amount: ${refund_amount:.2f}. Must be between $0.01 and the captured total (${payment.amount:.2f})."
         )
+    if payload and payload.currency and payload.currency.upper() != payment.currency.upper():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Refund currency '{payload.currency}' does not match payment currency '{payment.currency}'."
+        )
 
-    # Step 6: Verify explicit Human Approval Gate
+    # Step 5: Verify explicit Human Approval Gate
     if payment.approval_status == "REJECTED":
         raise HTTPException(
             status_code=403,
             detail="Refund blocked: Human investigator explicitly rejected financial remediation for this operation."
         )
 
-    case = None
-    if payment.case_id:
-        case = db.query(InvestigationCase).filter(InvestigationCase.id == payment.case_id).first()
-        if not case or case.status not in ("APPROVED", "ACTION_QUEUED", "ACTION_EXECUTING"):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Refund blocked: Investigation case {payment.case_id} requires explicit human approval before financial reversal."
-            )
-        if case.primary_transaction_id != payment.transaction_ref:
-            raise HTTPException(status_code=409, detail="Refund blocked: Payment transaction reference does not match the investigation case.")
+    if not payment.case_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Refund blocked: Payment operation is not linked to an investigation case."
+        )
+    case = db.query(InvestigationCase).filter(InvestigationCase.id == payment.case_id).first()
+    if not case or case.status not in ("APPROVED", "ACTION_QUEUED", "ACTION_EXECUTING") or case.approval_status != "APPROVED":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Refund blocked: Investigation case {payment.case_id} requires explicit human approval before financial reversal."
+        )
+    if case.primary_transaction_id != payment.transaction_ref:
+        raise HTTPException(status_code=409, detail="Refund blocked: Payment transaction reference does not match the investigation case.")
     if payment.approval_status != "APPROVED":
         raise HTTPException(status_code=403, detail="Refund blocked: Payment operation has no explicit human approval.")
+
+    # Step 6: Verify cross-record consistency between Transaction, Case, and Payment
+    txn = db.query(Transaction).filter(Transaction.id == payment.transaction_ref).first()
+    if txn:
+        if txn.currency.upper() != payment.currency.upper():
+            raise HTTPException(status_code=409, detail=f"Refund rejected: Currency mismatch between transaction ({txn.currency}) and payment ({payment.currency}).")
+        if abs(txn.amount - payment.amount) >= 0.005:
+            raise HTTPException(status_code=409, detail=f"Refund rejected: Amount mismatch between transaction (${txn.amount:.2f}) and payment (${payment.amount:.2f}).")
+        if txn.payment_status not in ("COMPLETED", "CAPTURED"):
+            raise HTTPException(status_code=409, detail=f"Refund rejected: Transaction status is '{txn.payment_status}', expected COMPLETED or CAPTURED.")
+
+    valid_integrity, integrity_warning = approval_integrity_state(db, case)
+    if not valid_integrity:
+        raise HTTPException(status_code=409, detail=f"Refund rejected: Record consistency check failed: {integrity_warning}")
 
     has_live_creds = bool(settings.PAYPAL_CLIENT_ID and settings.PAYPAL_CLIENT_SECRET)
     is_live_call = not payment.is_simulated
@@ -506,8 +592,8 @@ def execute_refund(
         case.status = "ACTION_EXECUTING"
         db.commit()
 
-    investigator = payload.investigator if payload and payload.investigator else "Senior Fraud Officer"
-    reason = payload.reason if payload and payload.reason else "AgentShield fraud remediation reversal"
+    investigator = payload.investigator
+    reason = payload.reason
 
     # Step 7: Execute supported Sandbox refund API or verified simulator
     idempotency_key = f"REF_{payment.id}_{refund_amount:.2f}"
@@ -740,7 +826,7 @@ def execute_refund(
         payment.payment_status = "REFUNDED"
         paypal_ref = paypal_refund_id
 
-        paypal_ref = paypal_refund_id or payment.capture_id
+        paypal_ref = paypal_refund_id
 
         # Record PAYPAL_REFUND_CONFIRMED (ONLY after live PayPal Sandbox response verified)
         conf_audit = AuditLog(

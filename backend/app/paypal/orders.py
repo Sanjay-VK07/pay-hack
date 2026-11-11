@@ -26,7 +26,14 @@ class PayPalOrders:
                     },
                     "description": "AgentShield Protected FinTech Checkout"
                 }
-            ]
+            ],
+            "application_context": {
+                "brand_name": "AgentShield Sandbox",
+                "landing_page": "BILLING",
+                "user_action": "PAY_NOW",
+                "return_url": "http://localhost:3000/payments?checkout=success",
+                "cancel_url": "http://localhost:3000/payments?checkout=cancel"
+            }
         }
         return self.client.post("/v2/checkout/orders", payload, idempotency_key=idempotency_key)
 

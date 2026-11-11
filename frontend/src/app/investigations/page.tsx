@@ -41,9 +41,13 @@ export default function InvestigationsPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [processingAction, setProcessingAction] = useState(false);
   const [approvalModal, setApprovalModal] = useState<{ open: boolean; action: 'APPROVE' | 'REJECT' } | null>(null);
-  const [approvalReason, setApprovalReason] = useState('Corroborated multi-agent fraud syndicate indicators');
-  const [investigatorName, setInvestigatorName] = useState('Chief Risk Officer');
+  const [approvalReason, setApprovalReason] = useState('');
+  const [investigatorName, setInvestigatorName] = useState('');
+  const [refundReason, setRefundReason] = useState('');
   const [expandedExecs, setExpandedExecs] = useState<Record<string, boolean>>({});
+  const latestRiskAssessment = caseDetail?.risk_assessments?.at(-1);
+  const displayedRiskScore = latestRiskAssessment?.risk_score ?? caseDetail?.primary_transaction?.risk_score;
+  const scoringDetails = caseDetail?.scoring_details || {};
 
   const toggleExec = (id: string) => {
     setExpandedExecs((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -87,7 +91,7 @@ export default function InvestigationsPage() {
   }, [selectedCaseId]);
 
   const handleExecuteApproval = async () => {
-    if (!selectedCaseId || !approvalModal) return;
+    if (!selectedCaseId || !approvalModal || !investigatorName.trim() || !approvalReason.trim()) return;
     setProcessingAction(true);
     try {
       if (approvalModal.action === 'APPROVE') {
@@ -125,7 +129,7 @@ export default function InvestigationsPage() {
   };
 
   const handleProcessRefund = async () => {
-    if (!caseDetail) return;
+    if (!caseDetail || !refundReason.trim() || !investigatorName.trim()) return;
     const payment = caseDetail.payment_operations?.[0] || (caseDetail.capture_id ? { id: caseDetail.capture_id } : null);
     if (!payment) {
       alert('No linked payment record found for refund.');
@@ -135,8 +139,8 @@ export default function InvestigationsPage() {
     setProcessingAction(true);
     try {
       await api.refundPayment(targetPaymentId, {
-        investigator: caseDetail.approving_user || investigatorName,
-        reason: 'Authorized AgentShield fraud remediation reversal',
+        investigator: investigatorName.trim(),
+        reason: refundReason.trim(),
       });
       await fetchCases();
       await fetchCaseDetail(selectedCaseId!);
@@ -162,7 +166,7 @@ export default function InvestigationsPage() {
               </span>
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              Autonomous multi-agent dossiers with explicit human approval gates before financial reversals
+              Investigation dossiers with explicit human approval gates before financial reversals
             </p>
           </div>
         </div>
@@ -233,7 +237,7 @@ export default function InvestigationsPage() {
                       </div>
                       {c.approval_integrity_valid === false && (
                         <div className="mt-2 text-[10px] text-amber-300 flex items-center gap-1" role="alert">
-                          <AlertTriangle className="h-3 w-3" /> Approval audit record missing or incomplete
+                          <AlertTriangle className="h-3 w-3 flex-shrink-0" /> State mismatch or unverified status
                         </div>
                       )}
                     </div>
@@ -308,8 +312,9 @@ export default function InvestigationsPage() {
                         <div className="flex flex-col items-end">
                           <div className="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-1.5 rounded-lg text-xs font-bold text-emerald-400">
                             <CheckCircle2 className="h-4 w-4" />
-                            <span>Authorized ({caseDetail.approving_user || 'Chief Risk Officer'})</span>
+                            <span>Reviewed by {caseDetail.approving_user || 'Name not recorded'}</span>
                           </div>
+                          <span className="text-[10px] font-mono text-slate-500 mt-1">(Name self-reported; caller not independently authenticated)</span>
                           {caseDetail.operation_reference && (
                             <span className="text-[10px] font-mono text-slate-400 mt-1">
                               Ref: {caseDetail.operation_reference}
@@ -323,13 +328,13 @@ export default function InvestigationsPage() {
                   {/* Executive Summary Box */}
                   <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 leading-relaxed">
                     <span className="font-bold text-cyan-300 block mb-1">Investigation Synthesis:</span>
-                    {caseDetail.summary || 'Autonomous multi-agent investigation completed. High risk signals validated.'}
+                    {caseDetail.summary || 'No investigation summary is stored for this case.'}
                   </div>
                   {caseDetail.approval_integrity_warning && (
                     <div role="alert" className="flex items-start gap-2.5 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 leading-relaxed">
                       <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-400" />
                       <div>
-                        <span className="font-bold block mb-1">Approval and audit records do not match</span>
+                        <span className="font-bold block mb-1">State Integrity Alert</span>
                         {caseDetail.approval_integrity_warning}
                       </div>
                     </div>
@@ -341,13 +346,13 @@ export default function InvestigationsPage() {
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                       <Clock className="h-4 w-4 text-cyan-400" />
-                      <span>Autonomous Agent Reasoning Timeline</span>
+                      <span>Investigation Timeline</span>
                       <span className="text-[10px] font-mono bg-cyan-950 border border-cyan-800/60 text-cyan-400 px-2 py-0.5 rounded-full font-bold">
-                        8 Phases
+                        {caseDetail.reasoning_timeline?.length || 0} Events
                       </span>
                     </h3>
                     <span className="text-[10px] font-mono text-slate-500">
-                      Multi-Agent Autonomous Execution
+                      Recorded activity
                     </span>
                   </div>
 
@@ -409,7 +414,7 @@ export default function InvestigationsPage() {
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
                   <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
                     <span>Transaction Details & Financial Validation</span>
-                    <span className="text-[10px] font-mono text-cyan-400 lowercase">foreign-key verified</span>
+                    <span className="text-[10px] font-mono text-cyan-400 lowercase">linked database record</span>
                   </h3>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
@@ -438,7 +443,7 @@ export default function InvestigationsPage() {
                         <ShieldAlert className="h-3.5 w-3.5 text-rose-400" /> Recommended Action
                       </span>
                       <p className="font-mono font-semibold text-rose-300 text-xs">{caseDetail.recommended_action}</p>
-                      <p className="text-[10px] text-slate-500">Autonomous Policy Rule</p>
+                      <p className="text-[10px] text-slate-500">Stored Recommendation</p>
                     </div>
 
                     <div className="p-3 bg-slate-900 rounded-lg border border-slate-800 space-y-1">
@@ -464,7 +469,7 @@ export default function InvestigationsPage() {
                     <div className="flex items-center space-x-2">
                       <CreditCard className="h-4 w-4 text-blue-400" />
                       <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                        PayPal Sandbox Settlement & Verification
+                        Payment Record & Refund Eligibility
                       </h3>
                       <span
                         className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold border ${
@@ -473,14 +478,16 @@ export default function InvestigationsPage() {
                             : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
                         }`}
                       >
-                        {caseDetail.paypal_verification?.integration_mode || 'SIMULATED_SANDBOX'}
+                        {caseDetail.paypal_verification?.is_simulated ? 'SIMULATED SANDBOX (DEMO)' : (caseDetail.paypal_verification?.integration_mode || 'SIMULATED SANDBOX')}
                       </span>
                     </div>
 
-                    {/* Verification Source Badge */}
+                    {/* Local payment record provenance */}
                     <div className="flex items-center space-x-1.5 text-[11px] font-mono text-slate-400">
                       <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>Source: {caseDetail.paypal_verification?.verification_source || 'REST V2 Captures'}</span>
+                      <span>
+                        Record source: {caseDetail.paypal_verification?.verification_source || 'Local payment ledger'}; this view does not query PayPal.
+                      </span>
                     </div>
                   </div>
 
@@ -494,11 +501,11 @@ export default function InvestigationsPage() {
                     </div>
 
                     <div className="p-3 bg-slate-900 rounded-lg border border-slate-800 space-y-1">
-                      <span className="text-[10px] text-slate-500 block uppercase font-mono">Captured Amount</span>
+                      <span className="text-[10px] text-slate-500 block uppercase font-mono">Amount in Payment Record</span>
                       <p className="font-mono text-slate-200 font-bold text-sm">
                         ${Number(caseDetail.paypal_verification?.captured_amount || 0).toFixed(2)} {caseDetail.paypal_verification?.currency || 'USD'}
                       </p>
-                      <span className="text-[10px] text-slate-400">Protection: {caseDetail.paypal_verification?.seller_protection || (caseDetail.capture_id ? 'ELIGIBLE' : 'INELIGIBLE_NO_CAPTURE')}</span>
+                      <span className="text-[10px] text-slate-400">Seller protection: {caseDetail.paypal_verification?.seller_protection || 'NOT_CHECKED'}</span>
                     </div>
 
                     <div className="p-3 bg-slate-900 rounded-lg border border-slate-800 space-y-1">
@@ -526,7 +533,7 @@ export default function InvestigationsPage() {
                         </span>
                       </div>
                       <span className={`text-[10px] ${caseDetail.capture_id ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        {caseDetail.capture_id ? 'Foreign Key Validated (Captured)' : 'Foreign Key Validated (Uncaptured)'}
+                        {caseDetail.capture_id ? 'Local payment record has a capture ID' : 'Local payment record has no capture ID'}
                       </span>
                     </div>
                   </div>
@@ -552,14 +559,18 @@ export default function InvestigationsPage() {
                     </div>
 
                     {caseDetail.approval_status === 'APPROVED' && caseDetail.approval_integrity_valid !== false && caseDetail.paypal_eligible && Number(caseDetail.paypal_verification?.refundable_balance || 0) > 0 && (
-                      <button
-                        onClick={handleProcessRefund}
-                        disabled={processingAction}
-                        className="flex items-center space-x-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-rose-600/20 transition-all"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                        <span>{processingAction ? 'Executing Reversal...' : 'Execute Authorized PayPal Refund'}</span>
-                      </button>
+                      <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                        <label className="text-[11px] text-slate-400 flex-1">Refund reason (required)
+                          <input value={refundReason} onChange={(e) => setRefundReason(e.target.value)} placeholder="Enter a reviewer-provided reason" className="mt-1 w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-2 text-xs text-white" />
+                        </label>
+                        <label className="text-[11px] text-slate-400 flex-1">Reviewer name (self-reported)
+                          <input value={investigatorName} onChange={(e) => setInvestigatorName(e.target.value)} placeholder="Enter your name" className="mt-1 w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-2 text-xs text-white" />
+                        </label>
+                        <button onClick={handleProcessRefund} disabled={processingAction || !refundReason.trim() || !investigatorName.trim()} className="flex items-center space-x-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-rose-600/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                          <RotateCcw className="h-4 w-4" />
+                          <span>{processingAction ? 'Processing...' : 'Execute PayPal Refund'}</span>
+                        </button>
+                      </div>
                     )}
 
                     {caseDetail.approval_status === 'APPROVED' && caseDetail.approval_integrity_valid !== false && (!caseDetail.capture_id || !caseDetail.paypal_eligible) && (
@@ -583,30 +594,29 @@ export default function InvestigationsPage() {
                     <div className="flex items-center space-x-2">
                       <Calculator className="h-4 w-4 text-cyan-400" />
                       <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                        Deterministic Risk Score Formulation (100.0 / 100)
+                        Stored Heuristic Risk Score ({displayedRiskScore != null ? `${Number(displayedRiskScore).toFixed(1)} / 100` : 'Not recorded'})
                       </h3>
                     </div>
                     <div className="flex items-center space-x-2 text-[11px] font-mono">
                       <span className="text-slate-400">Raw Sum:</span>
-                      <span className="text-rose-400 font-bold">{caseDetail.scoring_details?.raw_sum_of_weights || 182.0} pts</span>
+                      <span className="text-rose-400 font-bold">{scoringDetails.raw_sum_of_weights ?? 'Not recorded'} pts</span>
                       <span className="text-slate-500">→</span>
                       <span className="text-slate-400">Clamped Score:</span>
-                      <span className="text-rose-400 font-bold">100.0 / 100</span>
+                      <span className="text-rose-400 font-bold">{displayedRiskScore != null ? `${Number(displayedRiskScore).toFixed(1)} / 100` : 'Not recorded'}</span>
                     </div>
                   </div>
 
                   <div className="p-3 bg-slate-900 rounded-lg border border-slate-800 text-xs space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
                       <div className="font-mono text-cyan-300 text-[11px]">
-                        Formula: <span className="text-white font-semibold">{caseDetail.scoring_details?.deterministic_formula || 'Risk_Score = min(100.0, sum(factor_weights))'}</span>
+                        Formula: <span className="text-white font-semibold">{scoringDetails.deterministic_formula || 'No saved scoring formula'}</span>
                       </div>
                       <div className="text-[10px] font-mono text-slate-400">
-                        Clamped Delta: +{caseDetail.scoring_details?.excess_weight_clamped || 82.0} excess weight
+                        Clamped Delta: +{scoringDetails.excess_weight_clamped ?? 'Not recorded'}
                       </div>
                     </div>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      {caseDetail.scoring_details?.formula_explanation ||
-                        'Scores avoid arbitrary maximum assignments. Each corroborated forensic signal contributes an additive weight, with systemic score clamped at 100.0 to reflect critical certainty.'}
+                      {scoringDetails.formula_explanation || 'This stored score is a demo heuristic, not a calibrated probability. No current-version factor breakdown is available for this case.'}
                     </p>
                   </div>
 
@@ -616,7 +626,7 @@ export default function InvestigationsPage() {
                       Contributing Weighted Factors:
                     </div>
                     <div className="grid grid-cols-1 gap-2">
-                      {caseDetail.scoring_details?.contributing_factors?.map((f: any, idx: number) => (
+                      {scoringDetails.contributing_factors?.map((f: any, idx: number) => (
                         <div
                           key={idx}
                           className="flex items-center justify-between p-2.5 rounded bg-slate-900/60 border border-slate-800/60 text-xs"
@@ -636,18 +646,19 @@ export default function InvestigationsPage() {
                           </div>
                         </div>
                       ))}
+                      {!scoringDetails.contributing_factors?.length && <p className="text-xs text-slate-500">No current-version factor breakdown was saved for this case.</p>}
                     </div>
                   </div>
                 </div>
 
-                {/* 4. EVIDENCE MANAGEMENT WITH CONFIDENCE ENGINE & ALTERNATIVE HYPOTHESES */}
+                {/* 4. EVIDENCE RECORDS AND ALTERNATIVE EXPLANATIONS */}
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      Corroborated Forensic Evidence Records ({caseDetail.evidence?.length || 0})
+                      Evidence Records ({caseDetail.evidence?.length || 0})
                     </h3>
                     <span className="text-[11px] text-slate-400">
-                      Actual Verified Records: <span className="font-mono text-cyan-400 font-bold">{caseDetail.evidence?.length || 0}</span>
+                      Records attached: <span className="font-mono text-cyan-400 font-bold">{caseDetail.evidence?.length || 0}</span>
                     </span>
                   </div>
 
@@ -666,12 +677,6 @@ export default function InvestigationsPage() {
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
-                              {Math.round((ev.confidence_score || 0.95) * 100)}% Confidence
-                            </span>
-                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                              {ev.verification_status || 'VERIFIED'}
-                            </span>
                             <Badge type="risk" value={ev.severity} />
                           </div>
                         </div>
@@ -679,15 +684,15 @@ export default function InvestigationsPage() {
                         {/* Observed vs Baseline Comparison Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] py-1 bg-slate-950/40 p-2.5 rounded border border-slate-800/40">
                           <div>
-                            <span className="text-slate-500 block text-[10px] font-medium">ACTUAL OBSERVED VALUE:</span>
+                            <span className="text-slate-500 block text-[10px] font-medium">OBSERVED VALUE IN DEMO DATA:</span>
                             <span className="text-rose-300 font-semibold font-mono">
-                              {ev.observed_value || ev.description}
+                              {ev.observed_value || 'No observed value recorded'}
                             </span>
                           </div>
                           <div>
-                            <span className="text-slate-500 block text-[10px] font-medium">EXPECTED / BASELINE VALUE:</span>
+                            <span className="text-slate-500 block text-[10px] font-medium">BASELINE / REFERENCE VALUE:</span>
                             <span className="text-slate-400 font-mono">
-                              {ev.baseline_value || 'Normal account baseline parameters'}
+                              {ev.baseline_value || 'No baseline recorded'}
                             </span>
                           </div>
                         </div>
@@ -701,7 +706,7 @@ export default function InvestigationsPage() {
                           <div className="p-2.5 rounded bg-amber-950/20 border border-amber-500/20 text-xs space-y-1">
                             <div className="flex items-center space-x-1.5 text-amber-400 text-[11px] font-semibold">
                               <Info className="h-3.5 w-3.5 flex-shrink-0" />
-                              <span>Alternative Legitimate Explanation Evaluated:</span>
+                              <span>Possible Legitimate Explanation:</span>
                             </div>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
                               {ev.alternative_explanation}
@@ -716,11 +721,6 @@ export default function InvestigationsPage() {
                             {ev.related_account_id && <span>Account: <span className="text-slate-400">{ev.related_account_id}</span></span>}
                             {ev.related_transaction_id && <span>Txn: <span className="text-slate-400">{ev.related_transaction_id}</span></span>}
                           </div>
-                          <div className="flex items-center space-x-2 text-cyan-400">
-                            <span>Reliability: {ev.source_reliability || 'HIGH - Verified Telemetry'}</span>
-                            <span>•</span>
-                            <span>Corroboration: {ev.corroboration_count || 3} sources</span>
-                          </div>
                         </div>
                       </div>
                     ))}
@@ -730,7 +730,7 @@ export default function InvestigationsPage() {
                 {/* PRIORITY 7: Multi-Agent Execution Telemetry & Structured Output */}
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
                   <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                    <span>Specialized Multi-Agent Pipeline Telemetry</span>
+                    <span>Investigation Agent Steps</span>
                     <span className="text-[10px] font-mono text-emerald-400">Deterministic Engine & Evidence Backed</span>
                   </h3>
 
@@ -752,10 +752,7 @@ export default function InvestigationsPage() {
                             </div>
                             <div className="flex items-center space-x-2">
                               <span className="text-[10px] font-mono text-cyan-400">
-                                {exec.execution_time_ms ? `${exec.execution_time_ms}ms` : '48ms'}
-                              </span>
-                              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                {Math.round((exec.confidence_score || 0.95) * 100)}% Conf
+                                {exec.execution_time_ms > 0 ? `${exec.execution_time_ms}ms` : 'Timing unavailable'}
                               </span>
                               <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                                 {exec.status}
@@ -819,18 +816,19 @@ export default function InvestigationsPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">
-                  {approvalModal.action === 'APPROVE' ? 'Authorize Reversal Action' : 'Reject Investigation Action'}
+                  {approvalModal.action === 'APPROVE' ? 'Human Review: Approve Action' : 'Human Review: Reject Action'}
                 </h3>
-                <p className="text-xs text-slate-400">Explicit human investigator sign-off required</p>
+                <p className="text-xs text-slate-400">Human investigator review required. Name is self-reported; caller identity is not authenticated in this demo.</p>
               </div>
             </div>
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="text-slate-400 block mb-1">Authorizing Officer</label>
+                <label className="text-slate-400 block mb-1">Reviewing Officer Name <span className="text-slate-500 font-normal">(self-reported, not authenticated)</span></label>
                 <input
                   type="text"
                   value={investigatorName}
+                  placeholder="Enter your name"
                   onChange={(e) => setInvestigatorName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
                 />
@@ -841,6 +839,7 @@ export default function InvestigationsPage() {
                 <textarea
                   rows={3}
                   value={approvalReason}
+                  placeholder="Describe the evidence and reason for your decision"
                   onChange={(e) => setApprovalReason(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
                 />
@@ -856,7 +855,7 @@ export default function InvestigationsPage() {
               </button>
               <button
                 onClick={handleExecuteApproval}
-                disabled={processingAction}
+                disabled={processingAction || !investigatorName.trim() || !approvalReason.trim()}
                 className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white shadow-md transition-all ${
                   approvalModal.action === 'APPROVE'
                     ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'

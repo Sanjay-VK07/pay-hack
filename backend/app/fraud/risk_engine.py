@@ -42,7 +42,7 @@ class DeterministicRiskEngine:
                 score_add = 25.0
                 risk_score += score_add
                 breakdown["emulator_detected"] = score_add
-                rf = f"Device fingerprint '{device.device_fingerprint}' identified as an Android/iOS emulator runtime environment."
+                rf = f"Device record in the demo dataset is marked as an emulator ({device.device_fingerprint}). This metadata is not independently verified by a hardware sensor."
                 risk_factors.append(rf)
                 ev_id = f"EV_{transaction.id}_DEV_EMUL"
                 evidence_ids.append(ev_id)
@@ -51,15 +51,11 @@ class DeterministicRiskEngine:
                     "evidence_type": "DEVICE_FINGERPRINT",
                     "source_entity": device.id,
                     "target_entity": transaction.id,
-                    "observed_value": f"Emulator environment ({device.device_fingerprint})",
+                    "observed_value": f"Demo device record marked emulator ({device.device_fingerprint})",
                     "baseline_value": "Physical mobile or desktop hardware profile",
                     "severity": "CRITICAL",
-                    "confidence_score": 0.96,
-                    "source_reliability": "HIGH - Hardware Profiler & WebGL Sensor",
-                    "corroboration_count": 3,
-                    "alternative_explanation": "Software developer testing apps or automated QA run. Improbable when combined with proxy IP and high-ticket spend.",
-                    "verification_status": "VERIFIED",
-                    "explanation": f"Headless emulator runtime detected ({device.os}, {device.browser}) typically used in automated attack tooling.",
+                    "alternative_explanation": "Software development or automated QA may legitimately use emulator environments.",
+                    "explanation": f"The stored device metadata lists {device.os} and {device.browser} and marks this record as an emulator; it does not prove automated abuse.",
                     "related_transaction_id": transaction.id,
                     "related_account_id": customer.id if customer else None,
                     "description": rf
@@ -74,7 +70,7 @@ class DeterministicRiskEngine:
                 score_add = min(25.0, len(shared_accounts) * 12.5)
                 risk_score += score_add
                 breakdown["device_sharing"] = score_add
-                rf = f"Device hardware identifier shared across {len(shared_accounts) + 1} distinct customer accounts."
+                rf = f"Device identifier is linked to {len(shared_accounts) + 1} customer accounts in the local transaction records. Shared use alone does not establish fraud."
                 risk_factors.append(rf)
                 ev_id = f"EV_{transaction.id}_DEV_SHARE"
                 evidence_ids.append(ev_id)
@@ -83,15 +79,11 @@ class DeterministicRiskEngine:
                     "evidence_type": "DEVICE_SHARING",
                     "source_entity": device.id,
                     "target_entity": customer.id if customer else "UNKNOWN_ACCOUNT",
-                    "observed_value": f"{len(shared_accounts) + 1} customer accounts bound to device {device.id}",
-                    "baseline_value": "1 customer account per unique device hardware fingerprint",
+                    "observed_value": f"{len(shared_accounts) + 1} customer accounts linked to device record {device.id}",
+                    "baseline_value": "No expected sharing baseline configured; analyst review required",
                     "severity": "CRITICAL" if len(shared_accounts) >= 2 else "HIGH",
-                    "confidence_score": 0.94,
-                    "source_reliability": "HIGH - Persistent Device Token & Fingerprint Hash",
-                    "corroboration_count": 3,
-                    "alternative_explanation": "Shared family workstation or public library computer. Device sharing alone is not fraud, but abnormal when coupled with stolen cards.",
-                    "verification_status": "VERIFIED",
-                    "explanation": f"Hardware fingerprint collision detected across multiple independent customer accounts indicating syndicate operation.",
+                    "alternative_explanation": "A family, workplace, or public computer may legitimately be shared.",
+                    "explanation": "The local transaction records associate this device identifier with multiple customer accounts; the relationship needs analyst review.",
                     "related_transaction_id": transaction.id,
                     "related_account_id": customer.id if customer else None,
                     "description": rf
@@ -103,7 +95,7 @@ class DeterministicRiskEngine:
                 score_add = 20.0
                 risk_score += score_add
                 breakdown["payment_identity_flagged"] = score_add
-                rf = f"Payment credential has active security flags: {', '.join(payment_identity.risk_flags)}."
+                rf = f"Payment identity record contains these demo risk flags: {', '.join(payment_identity.risk_flags)}. No issuer or external consortium lookup was performed."
                 risk_factors.append(rf)
                 ev_id = f"EV_{transaction.id}_PID_FLAG"
                 evidence_ids.append(ev_id)
@@ -113,14 +105,10 @@ class DeterministicRiskEngine:
                     "source_entity": payment_identity.id,
                     "target_entity": transaction.id,
                     "observed_value": f"Risk Flags: {', '.join(payment_identity.risk_flags)} ({payment_identity.masked_value})",
-                    "baseline_value": "Clear credential status with zero fraud watch flags",
+                    "baseline_value": "No external credential status lookup was performed",
                     "severity": "HIGH",
-                    "confidence_score": 0.91,
-                    "source_reliability": "HIGH - Issuer Network Security Alert",
-                    "corroboration_count": 2,
-                    "alternative_explanation": "Account recently reported lost or replaced by bank for routine reissue.",
-                    "verification_status": "VERIFIED",
-                    "explanation": f"Card credential {payment_identity.masked_value} is pre-flagged on external fraud consortium listings.",
+                    "alternative_explanation": "The stored risk flags may be stale or unrelated to this transaction.",
+                    "explanation": f"The local payment identity record for {payment_identity.masked_value} contains risk flags; their origin is not independently verified.",
                     "related_transaction_id": transaction.id,
                     "related_account_id": customer.id if customer else None,
                     "description": rf
@@ -134,7 +122,7 @@ class DeterministicRiskEngine:
                 score_add = 25.0
                 risk_score += score_add
                 breakdown["payment_identity_reused"] = score_add
-                rf = f"Payment credential '{payment_identity.masked_value}' used across {len(shared_owners) + 1} distinct user accounts (card-cloning indicator)."
+                rf = f"Payment identity '{payment_identity.masked_value}' is linked to {len(shared_owners) + 1} customer accounts in the local transaction records. This relationship alone does not establish card cloning."
                 risk_factors.append(rf)
                 ev_id = f"EV_{transaction.id}_PID_SHARE"
                 evidence_ids.append(ev_id)
@@ -144,14 +132,10 @@ class DeterministicRiskEngine:
                     "source_entity": payment_identity.id,
                     "target_entity": customer.id if customer else "UNKNOWN_ACCOUNT",
                     "observed_value": f"Shared across {len(shared_owners) + 1} distinct accounts ({payment_identity.masked_value})",
-                    "baseline_value": "1 cardholder identity per individual customer account",
+                    "baseline_value": "No expected sharing baseline configured; analyst review required",
                     "severity": "CRITICAL",
-                    "confidence_score": 0.98,
-                    "source_reliability": "CRITICAL - Payment Processor Tokenization",
-                    "corroboration_count": 4,
-                    "alternative_explanation": "Corporate purchasing card shared across department members. Unlikely given mismatched personal registration names.",
-                    "verification_status": "VERIFIED",
-                    "explanation": f"The exact same payment method ({payment_identity.masked_value}) was used across multiple unrelated account profiles.",
+                    "alternative_explanation": "A payment method may be legitimately shared by family members or within an organization.",
+                    "explanation": f"The local records share payment identity {payment_identity.masked_value} across accounts; verify legitimate shared-card use before drawing a conclusion.",
                     "related_transaction_id": transaction.id,
                     "related_account_id": customer.id if customer else None,
                     "description": rf
@@ -171,7 +155,7 @@ class DeterministicRiskEngine:
                 score_add = 22.0
                 risk_score += score_add
                 breakdown["velocity_spike"] = score_add
-                rf = f"High transaction velocity: {recent_txns + 1} transactions executed within a 60-minute window."
+                rf = f"High transaction velocity: {recent_txns + 1} transactions are recorded within a 60-minute window."
                 risk_factors.append(rf)
                 ev_id = f"EV_{transaction.id}_VELOCITY"
                 evidence_ids.append(ev_id)
@@ -181,14 +165,10 @@ class DeterministicRiskEngine:
                     "source_entity": transaction.id,
                     "target_entity": customer.id if customer else "UNKNOWN_ACCOUNT",
                     "observed_value": f"{recent_txns + 1} transactions in 60 minutes",
-                    "baseline_value": "Maximum 1 transaction per 24 hours baseline for account tier",
+                    "baseline_value": "Configured rule threshold: 4 or more recorded transactions in a rolling 60-minute window",
                     "severity": "HIGH",
-                    "confidence_score": 0.93,
-                    "source_reliability": "HIGH - Transaction Ledger Timestamps",
-                    "corroboration_count": 3,
                     "alternative_explanation": "Legitimate customer ordering multiple items individually or retrying after checkout glitch.",
-                    "verification_status": "VERIFIED",
-                    "explanation": "Rapid burst checkout velocity violates standard consumer behavior profiles, indicating bot checkout script.",
+                    "explanation": "The recorded transaction count exceeds this rule's threshold; it is a review signal and does not establish automated activity.",
                     "related_transaction_id": transaction.id,
                     "related_account_id": customer.id if customer else None,
                     "description": rf
@@ -213,14 +193,10 @@ class DeterministicRiskEngine:
                 "source_entity": transaction.id,
                 "target_entity": customer.id if customer else "UNKNOWN_ACCOUNT",
                 "observed_value": f"${transaction.amount:,.2f} {transaction.currency}",
-                "baseline_value": "Configured threshold: $1,500.00 USD (Baseline customer avg: $120.00)",
+            "baseline_value": "Configured rule threshold: $1,500.00 USD",
                 "severity": "HIGH",
-                "confidence_score": 0.90,
-                "source_reliability": "HIGH - Payment Gateway Capture Amount",
-                "corroboration_count": 2,
                 "alternative_explanation": "Legitimate major appliance, electronics or jewelry purchase. Amount alone does not prove fraud.",
-                "verification_status": "VERIFIED",
-                "explanation": f"Transaction amount of ${transaction.amount:,.2f} significantly deviates from average order values and trips high-risk limits.",
+                "explanation": f"Transaction amount of ${transaction.amount:,.2f} meets the configured high-value rule threshold; no customer-specific spending baseline was used by this rule.",
                 "related_transaction_id": transaction.id,
                 "related_account_id": customer.id if customer else None,
                 "description": rf
@@ -248,15 +224,11 @@ class DeterministicRiskEngine:
                 "evidence_type": "FAILED_AUTH_SPIKE",
                 "source_entity": transaction.id,
                 "target_entity": customer.id if customer else "UNKNOWN_ACCOUNT",
-                "observed_value": f"{prior_failed} failed authorization attempts prior to checkout",
-                "baseline_value": "0 failed attempts in preceding 24 hours",
+                "observed_value": f"{prior_failed} failed transactions are recorded for this customer",
+                "baseline_value": "Configured rule threshold: at least 2 failed transactions in the stored history",
                 "severity": "HIGH",
-                "confidence_score": 0.95,
-                "source_reliability": "HIGH - Gateway Authorization Decline Logs",
-                "corroboration_count": 3,
                 "alternative_explanation": "User mistyping card expiration date or billing CVV multiple times before getting it right.",
-                "verification_status": "VERIFIED",
-                "explanation": "Multiple successive declined authorization requests (e.g. Invalid CVV, Do Not Honor) indicate systematic card testing probing.",
+                "explanation": "The stored history exceeds the failed-transaction rule threshold; the current rule does not verify the decline reason or its timing.",
                 "related_transaction_id": transaction.id,
                 "related_account_id": customer.id if customer else None,
                 "description": rf
@@ -267,7 +239,7 @@ class DeterministicRiskEngine:
             score_add = 10.0
             risk_score += score_add
             breakdown["new_account_large_spend"] = score_add
-            rf = f"New customer account ({customer.account_age_days} days old) initiated rapid high-value checkout."
+            rf = f"Customer account record is {customer.account_age_days} days old and the transaction exceeds the configured amount threshold."
             risk_factors.append(rf)
             ev_id = f"EV_{transaction.id}_NEW_ACCT"
             evidence_ids.append(ev_id)
@@ -277,14 +249,10 @@ class DeterministicRiskEngine:
                 "source_entity": customer.id,
                 "target_entity": transaction.id,
                 "observed_value": f"Account age: {customer.account_age_days} days (Amount: ${transaction.amount:,.2f})",
-                "baseline_value": "Established tenure >= 90 days before high-value spending",
+                "baseline_value": "Configured rule thresholds: account age under 7 days and amount over $300",
                 "severity": "MEDIUM",
-                "confidence_score": 0.88,
-                "source_reliability": "MEDIUM - Customer Profile Creation Timestamp",
-                "corroboration_count": 2,
                 "alternative_explanation": "New user who registered specifically to purchase an advertised high-ticket item.",
-                "verification_status": "VERIFIED",
-                "explanation": "Freshly provisioned customer accounts exhibiting immediate high-ticket orders carry high chargeback probability.",
+                "explanation": "This is a rule-based review signal; account age and amount alone do not establish fraud or predict a chargeback.",
                 "related_transaction_id": transaction.id,
                 "related_account_id": customer.id,
                 "description": rf
@@ -297,24 +265,20 @@ class DeterministicRiskEngine:
             breakdown["coordinated_cluster_membership"] = score_add
             cluster_name = cluster_info.get("name", "Syndicate Network")
             accounts_count = cluster_info.get("member_accounts_count", 4)
-            rf = f"Correlated member of coordinated fraud network '{cluster_name}' with {accounts_count} linked accounts."
+            rf = f"Transaction is linked to graph component '{cluster_name}' with {accounts_count} accounts in the demo graph. This is a relationship signal, not a confirmed fraud network."
             risk_factors.append(rf)
             ev_id = f"EV_{transaction.id}_CLUSTER"
             evidence_ids.append(ev_id)
             evidence_records.append({
                 "id": ev_id,
-                "evidence_type": "COORDINATED_FRAUD_CLUSTER",
+                "evidence_type": "CONNECTED_GRAPH_COMPONENT",
                 "source_entity": transaction.id,
                 "target_entity": cluster_info.get("id", "CLUSTER_001"),
                 "observed_value": f"Member of {cluster_name} ({accounts_count} linked accounts)",
                 "baseline_value": "Isolated graph node (0 shared device, IP, or credential links)",
                 "severity": "CRITICAL",
-                "confidence_score": 0.97,
-                "source_reliability": "CRITICAL - NetworkX Multi-Hop Graph Clustering",
-                "corroboration_count": 5,
                 "alternative_explanation": "Shared office co-working space or university campus network. Graph triangulation separates legitimate campus nodes from credential-sharing rings.",
-                "verification_status": "CORROBORATED",
-                "explanation": "NetworkX graph analysis identified multi-hop connection to an active fraud cluster sharing device emulators and payment tokens.",
+                "explanation": "NetworkX connected the records through shared identifiers in the local dataset; the graph does not independently confirm fraudulent intent.",
                 "related_transaction_id": transaction.id,
                 "related_account_id": customer.id if customer else None,
                 "description": rf
@@ -325,7 +289,7 @@ class DeterministicRiskEngine:
             score_add = 12.0
             risk_score += score_add
             breakdown["proxy_ip"] = score_add
-            rf = f"Transaction routed through known anonymizing VPN/Tor exit gateway ({transaction.ip_address})."
+            rf = f"Transaction IP matches an address in the application's configured demo rule list ({transaction.ip_address}); no live threat-intelligence lookup was performed."
             risk_factors.append(rf)
             ev_id = f"EV_{transaction.id}_PROXY_IP"
             evidence_ids.append(ev_id)
@@ -334,15 +298,11 @@ class DeterministicRiskEngine:
                 "evidence_type": "GEO_PROXY_IP",
                 "source_entity": transaction.id,
                 "target_entity": transaction.ip_address,
-                "observed_value": f"IP: {transaction.ip_address} (Anonymized Exit Node)",
-                "baseline_value": "Residential ISP IP matching billing postal region",
+                "observed_value": f"IP matched configured demo rule: {transaction.ip_address}",
+                "baseline_value": "Configured demo rule-list match; no location comparison is performed",
                 "severity": "HIGH",
-                "confidence_score": 0.86,
-                "source_reliability": "MEDIUM - IP Threat Intelligence & ASN Routing",
-                "corroboration_count": 2,
                 "alternative_explanation": "Privacy-conscious user running commercial VPN or iCloud Private Relay. Never treated as proof of fraud in isolation.",
-                "verification_status": "VERIFIED",
-                "explanation": "Network routing through datacenter/Tor proxy obfuscates true originating physical location.",
+                "explanation": "The configured rule match is a signal for review; this app did not verify the IP against a live threat-intelligence service.",
                 "related_transaction_id": transaction.id,
                 "related_account_id": customer.id if customer else None,
                 "description": rf
@@ -354,16 +314,18 @@ class DeterministicRiskEngine:
         # Build transparent mathematical score explanation
         contributing_factors = []
         factor_defs = [
-            ("emulator_detected", "Shared Emulator Environment", 25.0, "Headless emulator profile matching synthetic identity farming"),
-            ("device_sharing", "Device Sharing Collision", 25.0, "Hardware fingerprint shared across multiple unrelated accounts"),
-            ("payment_identity_reused", "Shared Payment Identity (Card Sharing)", 25.0, "Credit card tokenized across multiple customer profiles"),
-            ("payment_identity_flagged", "Flagged Payment Credential", 20.0, "Cardholder token on global fraud consortium warning lists"),
-            ("coordinated_cluster_membership", "Coordinated Syndicate Cluster Linkage", 30.0, "Multi-hop graph triangulation confirmed active ring membership"),
-            ("velocity_spike", "Transaction Velocity Spike", 25.0, "High order frequency within a 60-minute window"),
-            ("high_amount", "High Ticket Value Threshold", 20.0, "Order amount exceeds configured $1,500.00 policy limit"),
-            ("failed_attempt_loop", "Failed Authorization Attempt Loop", 15.0, "Multiple card authorization declines prior to completion"),
-            ("new_account_large_spend", "New Account Rapid Spend", 10.0, "Freshly registered user placing high-ticket order"),
-            ("proxy_ip", "Anonymized Proxy / Tor IP Gateway", 15.0, "Traffic routed via datacenter or Tor exit gateway")
+            ("emulator_detected", "Emulator Metadata Flag", 25.0, "Device record in the demo dataset is marked as an emulator"),
+            ("device_sharing", "Device Identifier Reuse", 25.0, "Device identifier is linked to multiple local account records"),
+            ("payment_identity_reused", "Shared Payment Identity", 25.0, "Payment identity is linked to multiple local account records"),
+            ("payment_identity_flagged", "Payment Identity Risk Flags", 20.0, "Payment identity record contains demo risk flags"),
+            ("coordinated_cluster_membership", "Connected Graph Component", 30.0, "Transaction is connected to other records in the local graph"),
+            ("velocity_spike", "Transaction Velocity Spike", 22.0, "Four or more recorded transactions in a rolling 60-minute window"),
+            ("velocity_moderate", "Repeated Transaction Activity", 8.0, "At least two recorded transactions in a rolling 60-minute window"),
+            ("high_amount", "High Amount Rule", 18.0, "Transaction amount meets the configured $1,500 threshold"),
+            ("elevated_amount", "Elevated Amount Rule", 8.0, "Transaction amount meets the configured $750 threshold"),
+            ("failed_attempt_loop", "Failed Transaction Count", 15.0, "At least two failed transactions appear in stored history"),
+            ("new_account_large_spend", "New Account and Amount Rule", 10.0, "Account age and amount meet configured review thresholds"),
+            ("proxy_ip", "Configured IP Rule Match", 12.0, "IP matches a local configured demo rule; no live lookup was performed")
         ]
 
         for key, name, max_w, rationale in factor_defs:
@@ -383,6 +345,7 @@ class DeterministicRiskEngine:
                 })
 
         scoring_details = {
+            "calculation_version": "heuristic_v2",
             "formula": "Final Score = min(100.0, sum(Contributed Factor Weights))",
             "deterministic_formula": "Risk_Score = min(100.0, sum(factor_weights))",
             "raw_score": round(risk_score, 1),
@@ -394,7 +357,7 @@ class DeterministicRiskEngine:
             "excess_weight_clamped": round(max(0.0, risk_score - 100.0), 1),
             "factors_count": len(contributing_factors),
             "contributing_factors": contributing_factors,
-            "formula_explanation": "Each corroborated evidence item contributes an additive risk weight. The final score is clamped at 100.0 to represent maximum systemic risk without arbitrary inflation."
+            "formula_explanation": "Each configured heuristic adds its rule weight. The final score is clamped at 100. This demo score is not a calibrated probability of fraud."
         }
 
         # Normalize total score to range 0.0 - 100.0
@@ -418,13 +381,13 @@ class DeterministicRiskEngine:
         if risk_factors:
             explanation = (
                 f"AgentShield deterministic risk engine classified transaction {transaction.id} as {risk_level} "
-                f"(Risk Score: {final_score}/100.0). Identified {len(risk_factors)} critical risk factor(s): "
+                f"(Heuristic Score: {final_score}/100.0). Identified {len(risk_factors)} review signal(s): "
                 f"{'; '.join(risk_factors)}."
             )
         else:
             explanation = (
-                f"Transaction {transaction.id} verified within standard parameters. Risk Score: {final_score}/100.0 ({risk_level}). "
-                "No abnormal velocity, device reuse, or shared payment identities identified."
+                f"No configured review rule was triggered for transaction {transaction.id}. "
+                f"Heuristic Score: {final_score}/100.0 ({risk_level}); this does not independently establish that the transaction is safe."
             )
 
         return {

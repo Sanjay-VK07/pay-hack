@@ -20,32 +20,37 @@ class FraudInvestigationAgent(BaseAgent):
         evidence_synthesis: List[str] = []
         if is_coordinated:
             evidence_synthesis.append(
-                f"Graph analysis confirmed active membership in {cluster_type} ({cluster_info.get('name')}) linking {member_count} customer accounts."
+                f"Local graph records include this activity in the {cluster_type} group ({cluster_info.get('name')}) with {member_count} linked customer accounts; association is a review signal, not proof of fraud."
             )
             evidence_synthesis.append(
-                f"Financial exposure across coordinated ring totals ${total_exposure:.2f} across shared hardware & card identities."
+                f"Recorded transaction value in the linked group totals ${total_exposure:.2f}; this is not a verified loss amount."
             )
         else:
             evidence_synthesis.append("Transaction graph indicates isolated execution pattern with no active syndicate links.")
 
         if id_findings.get("is_emulator"):
-            evidence_synthesis.append("Confirmed automated bot/emulator runtime signature.")
+            evidence_synthesis.append("The linked local device record is marked as an emulator; no independent hardware check was performed.")
 
         # Attempt LLM synthesis if available
         llm_response = None
         if self.has_llm:
-            prompt = (
-                f"Investigate fraud ring: Cluster {cluster_info.get('name')} with {member_count} accounts, "
-                f"${total_exposure} exposure. Txn findings: {tx_findings}. Identity findings: {id_findings}."
-            )
-            system = "You are a Lead Fraud Investigation Agent. Synthesize graph and identity evidence into JSON: summary, evidence_synthesis (list), confidence_score (float 0-1)."
+            provider_context = {
+                "cluster_type": cluster_type,
+                "linked_account_count": member_count,
+                "recorded_transaction_value": total_exposure,
+                "graph_link_present": bool(is_coordinated),
+                "transaction_signal_count": len(tx_findings.get("anomalies", [])),
+                "identity_signal_count": len(id_findings.get("identity_flags", [])),
+                "local_review_signals": evidence_synthesis,
+            }
+            prompt = f"Summarize these local investigation signals only: {provider_context}. State uncertainty and do not infer guilt, verified loss, or evidence not supplied."
+            system = "You are a Lead Fraud Investigation Agent. Use only supplied signals, never invent evidence, and distinguish a local association from proof. Return JSON: summary, evidence_synthesis (list)."
             llm_response = self._call_llm_if_available(prompt, system)
 
         if llm_response and "summary" in llm_response:
             return {
                 "is_llm_generated": True,
                 "summary": llm_response.get("summary"),
-                "confidence_score": llm_response.get("confidence_score", 0.96),
                 "findings": {
                     "cluster_id": cluster_info.get("id"),
                     "cluster_type": cluster_type,
@@ -58,14 +63,13 @@ class FraudInvestigationAgent(BaseAgent):
 
         # Deterministic Expert Output
         summary = (
-            f"Multi-Agent investigation confirmed {cluster_type} pattern. "
-            + (f"Network consists of {member_count} coordinated accounts with ${total_exposure:.2f} exposure. Corroborated cross-account fraud indicators." if is_coordinated else "No multi-account fraud ring topology detected.")
+            f"Local graph review found a {cluster_type} pattern. "
+            + (f"The linked records include {member_count} accounts and ${total_exposure:.2f} in recorded transaction value. These associations require analyst review." if is_coordinated else "No multi-account link pattern was detected in the available local records.")
         )
 
         return {
             "is_llm_generated": False,
             "summary": summary,
-            "confidence_score": 0.97 if is_coordinated else 0.99,
             "findings": {
                 "cluster_id": cluster_info.get("id"),
                 "cluster_type": cluster_type,

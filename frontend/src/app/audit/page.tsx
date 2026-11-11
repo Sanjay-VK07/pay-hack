@@ -57,11 +57,11 @@ export default function AuditPage() {
             <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
               <span>Chronological Audit Trail</span>
               <span className="text-xs font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-                Immutable Ledger
+                Chronological Audit Ledger
               </span>
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              End-to-end cryptographic and chronological tracking of all agent decisions, human approvals, and PayPal API calls
+              Chronological tracking of all agent decisions, human approvals, and payment lifecycle events in relational storage
             </p>
           </div>
         </div>

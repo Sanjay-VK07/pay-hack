@@ -23,15 +23,14 @@ class RiskAssessmentAgent(BaseAgent):
         llm_response = None
         if self.has_llm:
             prompt = (
-                f"Explain fraud risk verdict: Score {risk_score}/100 ({risk_level}), "
-                f"Action {recommended_action}. Factors: {risk_factors}. "
-                f"Isolation Forest Anomaly Score: {anomaly_score}. "
-                f"Synthesized evidence: {investigation_findings.get('evidence_synthesis')}."
+                f"Explain this uncalibrated heuristic review score ({risk_score}/100, {risk_level}) and recommendation "
+                f"({recommended_action}) using only these rule factors: {risk_factors}; anomaly signal: {anomaly_score}; "
+                f"local investigation summary: {investigation_findings.get('evidence_synthesis')}. "
+                "Do not infer a probability, identity, intent, or independent verification."
             )
             system = (
-                "You are an enterprise FinTech Risk Assessment Agent. "
-                "Provide an authoritative executive explanation without changing the score. "
-                "Return JSON with keys: executive_explanation, confidence_score (float 0-1)."
+                "You are a FinTech Risk Assessment Agent. Use only the supplied local signals, do not invent evidence, and do not change the score. "
+                "Return JSON with keys: executive_explanation."
             )
             llm_response = self._call_llm_if_available(prompt, system)
 
@@ -40,7 +39,6 @@ class RiskAssessmentAgent(BaseAgent):
             return {
                 "is_llm_generated": True,
                 "summary": explanation,
-                "confidence_score": llm_response.get("confidence_score", 0.98),
                 "findings": {
                     "validated_risk_score": risk_score,
                     "risk_level": risk_level,
@@ -55,7 +53,6 @@ class RiskAssessmentAgent(BaseAgent):
         return {
             "is_llm_generated": False,
             "summary": explanation,
-            "confidence_score": 0.98,
             "findings": {
                 "validated_risk_score": risk_score,
                 "risk_level": risk_level,

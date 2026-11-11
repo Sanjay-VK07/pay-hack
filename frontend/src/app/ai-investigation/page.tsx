@@ -22,6 +22,18 @@ import {
   ShieldAlert
 } from 'lucide-react';
 
+function removeUncalibratedConfidence(value: any): any {
+  if (Array.isArray(value)) return value.map(removeUncalibratedConfidence);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !['confidence', 'confidence_score'].includes(key.toLowerCase()))
+        .map(([key, item]) => [key, removeUncalibratedConfidence(item)])
+    );
+  }
+  return value;
+}
+
 export default function AIInvestigationPage() {
   const [executions, setExecutions] = useState<any[]>([]);
   const [cases, setCases] = useState<any[]>([]);
@@ -84,7 +96,7 @@ export default function AIInvestigationPage() {
               </span>
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              Live sequential DAG reasoning logs with structured outputs, confidence scores, and unalterable factual risk factors
+              Sequential investigation steps with structured outputs; deterministic risk factors remain the scoring source
             </p>
           </div>
 
@@ -125,7 +137,7 @@ export default function AIInvestigationPage() {
               { stage: 'Graph Engine', desc: 'NetworkX Ring Traversal' },
               { stage: 'Fraud Investigation', desc: 'Multi-Account Synthesis' },
               { stage: 'Risk Assessment', desc: 'Deterministic Risk & Anomaly' },
-              { stage: 'Autonomous Response', desc: 'Human-Gated PayPal Action' },
+              { stage: 'Response Planning', desc: 'Recommendation for human review' },
             ].map((st, idx) => (
               <React.Fragment key={st.stage}>
                 <div className="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1">
@@ -142,8 +154,8 @@ export default function AIInvestigationPage() {
         {/* Executions Feed */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">Live Execution Telemetry ({executions.length} stages)</h3>
-            <span className="text-xs text-slate-400 font-mono">Backend Stream: Active</span>
+            <h3 className="text-sm font-semibold text-white">Recorded Investigation Steps ({executions.length})</h3>
+            <span className="text-xs text-slate-400 font-mono">Stored execution records</span>
           </div>
 
           {loading ? (
@@ -185,9 +197,6 @@ export default function AIInvestigationPage() {
                       </div>
 
                       <div className="flex items-center space-x-3">
-                        <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                          Confidence: {(exec.confidence_score * 100).toFixed(0)}%
-                        </span>
                         <span className="text-xs font-mono text-slate-400 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           {new Date(exec.started_at).toLocaleTimeString()}
@@ -218,7 +227,7 @@ export default function AIInvestigationPage() {
 
                     {isExpanded && (
                       <pre className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-cyan-300 overflow-x-auto max-h-72">
-                        {JSON.stringify(exec.output_json, null, 2)}
+                        {JSON.stringify(removeUncalibratedConfidence(exec.output_json), null, 2)}
                       </pre>
                     )}
                   </div>

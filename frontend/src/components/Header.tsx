@@ -4,14 +4,8 @@ import React, { useState } from 'react';
 import { api } from '@/lib/api';
 import {
   Play,
-  RotateCcw,
-  Zap,
-  PlusCircle,
-  ShieldCheck,
   CheckCircle2,
-  AlertTriangle,
-  Loader2,
-  RefreshCw
+  Loader2
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -75,58 +69,6 @@ export function Header({ onRefresh }: HeaderProps) {
           <span>Run Fraud Investigation</span>
         </button>
 
-        <button
-          onClick={() => handleAction('Trigger Attack', () => api.triggerSuspiciousAttack())}
-          disabled={loadingAction !== null}
-          className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 rounded-md text-xs font-medium transition-all disabled:opacity-50"
-        >
-          {loadingAction === 'Trigger Attack' ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Zap className="h-3.5 w-3.5 text-rose-400" />
-          )}
-          <span>Trigger Attack</span>
-        </button>
-
-        <button
-          onClick={() => handleAction('Simulate Txn', () => api.simulateLegitTransaction())}
-          disabled={loadingAction !== null}
-          className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 rounded-md text-xs font-medium transition-all disabled:opacity-50"
-        >
-          {loadingAction === 'Simulate Txn' ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <PlusCircle className="h-3.5 w-3.5 text-blue-400" />
-          )}
-          <span>+ Legitimate Txn</span>
-        </button>
-
-        <button
-          onClick={() => handleAction('Load Demo Data', () => api.seedDemo())}
-          disabled={loadingAction !== null}
-          title="Reload reproducible synthetic marketplace scenario"
-          className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 rounded-md text-xs font-medium transition-all disabled:opacity-50"
-        >
-          {loadingAction === 'Load Demo Data' ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5 text-slate-400" />
-          )}
-          <span>Seed Demo</span>
-        </button>
-
-        <button
-          onClick={() => handleAction('Reset Data', () => api.resetDemo())}
-          disabled={loadingAction !== null}
-          title="Clear database to clean state"
-          className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/80 rounded-md transition-all disabled:opacity-50"
-        >
-          {loadingAction === 'Reset Data' ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RotateCcw className="h-3.5 w-3.5" />
-          )}
-        </button>
       </div>
     </header>
   );

@@ -13,22 +13,32 @@ import {
   ShieldAlert,
   Loader2,
   Lock,
-  ArrowRight
+  ArrowRight,
+  Info
 } from 'lucide-react';
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<any[]>([]);
+  const [paypalStatus, setPaypalStatus] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refundingId, setRefundingId] = useState<string | null>(null);
   const [checkingRefundId, setCheckingRefundId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<any | null>(null);
-  const [refundReason, setRefundReason] = useState('AgentShield verified fraud syndicate remediation');
+  const [refundReason, setRefundReason] = useState('');
+  const [refundInvestigator, setRefundInvestigator] = useState('');
 
   const fetchPayments = async () => {
     setLoading(true);
     try {
-      const data = await api.getPayments();
-      setPayments(data);
+      const [paymentResult, statusResult] = await Promise.allSettled([api.getPayments(), api.getDemoStatus()]);
+      if (paymentResult.status === 'fulfilled') {
+        setPayments(paymentResult.value);
+        setLoadError(null);
+      } else {
+        setLoadError('Could not load the payment ledger. Check that the local API is running.');
+      }
+      if (statusResult.status === 'fulfilled') setPaypalStatus(statusResult.value);
     } catch (err) {
       console.error('Failed to load payments:', err);
     } finally {
@@ -41,12 +51,12 @@ export default function PaymentsPage() {
   }, []);
 
   const handleExecuteRefund = async () => {
-    if (!confirmModal) return;
+    if (!confirmModal || !refundReason.trim() || !refundInvestigator.trim()) return;
     setRefundingId(confirmModal.id);
     try {
       const res = await api.refundPayment(confirmModal.id, {
         reason: refundReason,
-        investigator: 'Chief Risk Officer',
+        investigator: refundInvestigator.trim(),
       });
       alert(`Refund Status: ${res.refund_status}. ${res.is_simulated ? '[Simulated Sandbox Mode]' : '[Live PayPal Sandbox]'}`);
       setConfirmModal(null);
@@ -86,7 +96,7 @@ export default function PaymentsPage() {
               </span>
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              Authorized PayPal Sandbox Order captures, idempotent refund executions, and fraud mitigation holds
+              PayPal Sandbox status: {paypalStatus?.paypal_oauth_status || 'unknown'} • Demo payment records are simulations; live payment calls are not implied
             </p>
           </div>
         </div>
@@ -97,18 +107,26 @@ export default function PaymentsPage() {
           <div className="space-y-1 text-xs">
             <span className="font-bold text-white block">Strict FinTech Financial Safety Protocol</span>
             <p className="text-slate-400 leading-relaxed">
-              Refunds are strictly idempotent and restricted to verified completed captures. Reversals for high-risk transactions require prior multi-agent investigation and mandatory human sign-off.
+              Refund controls check the recorded capture, case approval, and eligibility state. The demo ledger is simulated; local records do not independently verify live PayPal capture status.
             </p>
           </div>
+        </div>
+
+        {/* Dataset Scope Disclaimer */}
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 flex items-start space-x-2.5">
+          <Info className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            <strong>Demo Dataset & Sandbox Scope:</strong> Records labeled <code className="text-amber-300 font-mono">SIMULATED SANDBOX</code> are pre-seeded local simulations. Records labeled <code className="text-cyan-300 font-mono">LIVE PAYPAL SANDBOX</code> represent verified orders created directly via PayPal Sandbox API (<code className="text-violet-300 font-mono">CREATED · Awaiting Buyer</code>). Buyer approval, capture, and refund remain unperformed and unverified.
+          </p>
         </div>
 
         {/* Payments Table */}
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl overflow-hidden shadow-xl">
           <div className="p-4 border-b border-slate-800/80 bg-slate-950 flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Settled & Captured Operations ({payments.length})
+              Payment Operations ({payments.length})
             </span>
-            <span className="text-xs text-slate-400 font-mono">Sandbox API: Active</span>
+            <span className="text-xs text-slate-400 font-mono">OAuth: {paypalStatus?.paypal_oauth_status || 'UNKNOWN'} • Demo simulations</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -117,6 +135,8 @@ export default function PaymentsPage() {
                 <Loader2 className="h-6 w-6 text-cyan-400 animate-spin mx-auto mb-2" />
                 <p className="text-xs text-slate-400">Loading payment ledger...</p>
               </div>
+            ) : loadError ? (
+              <div role="alert" className="p-16 text-center text-sm text-rose-300">{loadError}</div>
             ) : payments.length === 0 ? (
               <div className="p-16 text-center text-xs text-slate-400">
                 No active PayPal payment records found. Load the demo dataset from the top toolbar.
@@ -145,9 +165,26 @@ export default function PaymentsPage() {
                       && p.approval_status === 'APPROVED'
                       && !isRefunded
                       && !isProcessing;
+                    const isLivePayPal = !p.is_simulated;
                     return (
-                      <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="py-3.5 px-4 font-mono font-medium text-white">{p.id}</td>
+                      <tr
+                        key={p.id}
+                        className={`transition-colors ${
+                          isLivePayPal
+                            ? 'bg-cyan-950/20 hover:bg-cyan-900/30 border-l-2 border-l-cyan-400'
+                            : 'hover:bg-slate-800/40'
+                        }`}
+                      >
+                        <td className="py-3.5 px-4 font-mono font-medium text-white">
+                          <div className="flex items-center gap-1.5">
+                            <span>{p.id}</span>
+                            {isLivePayPal && (
+                              <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold">
+                                VERIFIED SANDBOX
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-3.5 px-4 font-mono text-cyan-400">
                           {p.capture_id || <span className="text-amber-400/80 italic text-[11px]">No Capture</span>}
                         </td>
@@ -180,7 +217,7 @@ export default function PaymentsPage() {
                               ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                               : 'bg-blue-500/10 text-cyan-300 border-blue-500/30'
                           }`}>
-                            {p.is_simulated ? 'SIMULATED SANDBOX' : 'LIVE PAYPAL SANDBOX'}
+                            {p.is_simulated ? 'SIMULATED SANDBOX (DEMO)' : 'LIVE PAYPAL SANDBOX'}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
@@ -195,12 +232,22 @@ export default function PaymentsPage() {
                           ) : isRefunded ? (
                             <span className="text-[11px] text-slate-400 font-mono">Reversed</span>
                           ) : isUncaptured ? (
-                            <span
-                              className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-mono text-amber-400/90 bg-amber-500/10 border border-amber-500/30"
-                              title="Uncaptured transaction has no settled PayPal funds to reverse."
-                            >
-                              Ineligible (No Capture)
-                            </span>
+                            <div className="flex flex-col items-end">
+                              <span
+                                className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-mono text-amber-400/90 bg-amber-500/10 border border-amber-500/30"
+                                title="Uncaptured transaction has no settled PayPal funds to reverse."
+                              >
+                                Ineligible (No Capture)
+                              </span>
+                              {p.approval_status === 'APPROVED' && (
+                                <span
+                                  className="mt-1 inline-flex items-center text-[10px] font-mono text-rose-300 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded"
+                                  title="Legacy record inconsistency: Payment operation is marked APPROVED but transaction was never captured. Remediation permanently blocked."
+                                >
+                                  State Mismatch (Blocked)
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             <button
                               onClick={() => setConfirmModal(p)}
@@ -232,7 +279,7 @@ export default function PaymentsPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">Execute PayPal Reversal</h3>
-                <p className="text-xs text-slate-400">Reverses captured funds to the original payer</p>
+                <p className="text-xs text-slate-400">Requires a captured payment and reviewer-provided details.</p>
               </div>
             </div>
 
@@ -252,11 +299,22 @@ export default function PaymentsPage() {
             </div>
 
             <div>
+              <label className="text-xs text-slate-400 block mb-1">Reviewer name (self-reported)</label>
+              <input
+                value={refundInvestigator}
+                onChange={(e) => setRefundInvestigator(e.target.value)}
+                placeholder="Enter your name"
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
               <label className="text-xs text-slate-400 block mb-1">Reason for Reversal</label>
               <textarea
                 rows={2}
                 value={refundReason}
                 onChange={(e) => setRefundReason(e.target.value)}
+                placeholder="Enter a reviewer-provided reason"
                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
               />
             </div>
@@ -270,7 +328,7 @@ export default function PaymentsPage() {
               </button>
               <button
                 onClick={handleExecuteRefund}
-                disabled={refundingId !== null}
+                disabled={refundingId !== null || !refundReason.trim() || !refundInvestigator.trim()}
                 className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-rose-600/20 transition-all flex items-center space-x-1.5"
               >
                 {refundingId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
