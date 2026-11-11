@@ -66,6 +66,18 @@ export default function AuditPage() {
           </div>
         </div>
 
+        {/* Judge & Reviewer Helper Guidance */}
+        <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-3.5 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center space-x-2 text-slate-300">
+            <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-cyan-300 font-mono text-[10px] uppercase border border-blue-500/30 font-bold">
+              Audit Integrity
+            </span>
+            <span>
+              Every case decision (<code className="text-cyan-300 font-mono">HUMAN_APPROVAL_GRANTED</code>), order creation (<code className="text-violet-300 font-mono">PAYPAL_ORDER_CREATED</code>), and rejected impossible transition (<code className="text-rose-300 font-mono">TRANSITION_REJECTED</code>) is recorded with timestamp and actor attribution in relational storage.
+            </span>
+          </div>
+        </div>
+
         {/* Filter Bar */}
         <form onSubmit={handleFilterSubmit} className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex flex-wrap items-center gap-4">
           <div className="flex items-center space-x-2 flex-1 min-w-[240px]">

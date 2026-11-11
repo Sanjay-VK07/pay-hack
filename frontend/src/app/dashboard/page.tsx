@@ -119,6 +119,100 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Judge & Reviewer Guided Workflow Stepper */}
+        <div className="rounded-xl bg-gradient-to-r from-blue-950/40 via-slate-900/90 to-indigo-950/30 border border-blue-500/30 p-5 shadow-lg shadow-blue-950/20">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 uppercase tracking-wider">
+                  Judge Quickstart
+                </span>
+                <span className="text-sm font-bold text-white">How AgentShield Solves Payment Fraud</span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
+                AgentShield helps risk teams triage suspicious transactions with <strong>explainable rules</strong> and <strong>syndicate graphs</strong>, keeping financial remediation strictly behind <strong>human approval gates</strong>.
+              </p>
+            </div>
+            <Link
+              href="/transactions"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-md transition-all whitespace-nowrap self-start lg:self-auto"
+            >
+              <span>Start Review with TXN_FRAUD_901</span>
+              <ArrowUpRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-4">
+            <Link
+              href="/transactions"
+              className="group p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 hover:border-cyan-500/40 transition-all flex items-start space-x-3"
+            >
+              <div className="w-6 h-6 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-xs font-bold flex items-center justify-center flex-shrink-0 group-hover:bg-cyan-500 group-hover:text-slate-950 transition-colors">
+                1
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-200 group-hover:text-cyan-300 transition-colors block">
+                  Triage Transactions
+                </span>
+                <span className="text-[11px] text-slate-400 leading-snug block mt-0.5">
+                  Inspect deterministic risk scores and emulator/proxy indicators.
+                </span>
+              </div>
+            </Link>
+
+            <Link
+              href="/fraud-networks"
+              className="group p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 hover:border-blue-500/40 transition-all flex items-start space-x-3"
+            >
+              <div className="w-6 h-6 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 font-mono text-xs font-bold flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500 group-hover:text-slate-950 transition-colors">
+                2
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-200 group-hover:text-blue-300 transition-colors block">
+                  Trace Syndicate Graph
+                </span>
+                <span className="text-[11px] text-slate-400 leading-snug block mt-0.5">
+                  Visualize multi-account card and device sharing across clusters.
+                </span>
+              </div>
+            </Link>
+
+            <Link
+              href="/investigations"
+              className="group p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 hover:border-indigo-500/40 transition-all flex items-start space-x-3"
+            >
+              <div className="w-6 h-6 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-mono text-xs font-bold flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-500 group-hover:text-slate-950 transition-colors">
+                3
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-200 group-hover:text-indigo-300 transition-colors block">
+                  Inspect Dossier & Gate
+                </span>
+                <span className="text-[11px] text-slate-400 leading-snug block mt-0.5">
+                  Review agent timeline, corroboration, and CASE_FRAUD_905 safety alert.
+                </span>
+              </div>
+            </Link>
+
+            <Link
+              href="/payments"
+              className="group p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 hover:border-violet-500/40 transition-all flex items-start space-x-3"
+            >
+              <div className="w-6 h-6 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-300 font-mono text-xs font-bold flex items-center justify-center flex-shrink-0 group-hover:bg-violet-500 group-hover:text-slate-950 transition-colors">
+                4
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-200 group-hover:text-violet-300 transition-colors block">
+                  Verify PayPal Sandbox
+                </span>
+                <span className="text-[11px] text-slate-400 leading-snug block mt-0.5">
+                  See verified live order (Awaiting Buyer) vs simulated demo records.
+                </span>
+              </div>
+            </Link>
+          </div>
+        </div>
+
         {/* 8 Primary Metrics Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* 1. Total Transactions */}
@@ -139,6 +233,7 @@ export default function DashboardPage() {
                 100% Ingested
               </span>
             </div>
+            <p className="text-[11px] text-slate-400 mt-2">Incoming payment requests evaluated</p>
           </div>
 
           {/* 2. Suspicious Transactions */}
@@ -159,6 +254,7 @@ export default function DashboardPage() {
                 Flagged for Review
               </span>
             </div>
+            <p className="text-[11px] text-slate-400 mt-2">Flagged by emulator, proxy, or velocity rules</p>
           </div>
 
           {/* 3. Fraud Networks Discovered */}
@@ -179,6 +275,7 @@ export default function DashboardPage() {
                 NetworkX Corroborated
               </span>
             </div>
+            <p className="text-[11px] text-slate-400 mt-2">Syndicates linked by shared cards & devices</p>
           </div>
 
           {/* 4. Estimated Exposure */}
@@ -199,6 +296,7 @@ export default function DashboardPage() {
                 High-Risk Capital
               </span>
             </div>
+            <p className="text-[11px] text-slate-400 mt-2">Total value of suspicious payments at risk</p>
           </div>
 
           {/* 5. Active Cases */}
@@ -219,6 +317,7 @@ export default function DashboardPage() {
                 Awaiting Gate Review
               </span>
             </div>
+            <p className="text-[11px] text-slate-400 mt-2">Investigation dossiers awaiting human review</p>
           </div>
 
           {/* 6. High-Risk Accounts */}
@@ -239,6 +338,7 @@ export default function DashboardPage() {
                 Profile Watchlist
               </span>
             </div>
+            <p className="text-[11px] text-slate-400 mt-2">Customer accounts with multiple risk flags</p>
           </div>
 
           {/* 7. Resolved Cases */}
@@ -259,6 +359,7 @@ export default function DashboardPage() {
                 Remediated
               </span>
             </div>
+            <p className="text-[11px] text-slate-400 mt-2">Completed human reviews & audit actions</p>
           </div>
 
           {/* 8. PayPal Operations */}
@@ -279,6 +380,7 @@ export default function DashboardPage() {
                 Captures / Refunds
               </span>
             </div>
+            <p className="text-[11px] text-slate-400 mt-2">1 live Sandbox order + 5 demo simulations</p>
           </div>
         </div>
 

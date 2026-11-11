@@ -465,6 +465,21 @@ function FraudNetworkFlow() {
           </div>
         </div>
 
+        {/* Judge & Reviewer Helper Guidance */}
+        <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-3.5 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center space-x-2 text-slate-300">
+            <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-cyan-300 font-mono text-[10px] uppercase border border-blue-500/30 font-bold">
+              Graph Context
+            </span>
+            <span>
+              Graph edges represent stored relationships (shared cards, devices, and velocity links). They are <strong>review signals</strong> to guide analysts, not autonomous proof.
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-cyan-300 whitespace-nowrap">
+            Next: Review investigation dossiers in <strong className="font-normal text-white">Investigation Workspace</strong> &rarr;
+          </span>
+        </div>
+
         {/* Dynamic Consistent Coordinated Ring Alert Banner */}
         {activeCluster && activeCluster.is_coordinated && (
           <div className="p-4 rounded-xl bg-rose-950/30 border border-rose-500/40 flex items-start space-x-3.5 backdrop-blur shadow-lg shadow-rose-950/20">

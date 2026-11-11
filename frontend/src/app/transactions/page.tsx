@@ -264,6 +264,32 @@ export default function TransactionsPage() {
           </div>
         </div>
 
+        {/* Judge & Reviewer Helper Guidance */}
+        <div className="rounded-xl bg-slate-900/70 border border-slate-800 p-4 text-xs space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <span className="font-semibold text-slate-200 flex items-center gap-2">
+              <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-cyan-300 font-mono text-[10px] uppercase border border-blue-500/30">
+                Evaluation Tip
+              </span>
+              Click any row to open the forensic intelligence drawer and review supporting evidence.
+            </span>
+            <span className="text-[11px] font-mono text-cyan-400 bg-cyan-950/60 px-2.5 py-1 rounded border border-cyan-800/60 font-semibold self-start sm:self-auto">
+              ⭐ Recommended Demo Target: TXN_FRAUD_901 ($2,450.00 USD, Critical)
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+            <div>
+              <strong className="text-slate-300">Deterministic Risk Score:</strong> 0–100 scale computed by mathematical rules (proxy IP, emulator, velocity)—not a black-box model.
+            </div>
+            <div>
+              <strong className="text-slate-300">Device Fingerprint:</strong> Hardware profile identifier used to detect emulators and multi-account hardware sharing.
+            </div>
+            <div>
+              <strong className="text-slate-300">Next Step:</strong> After reviewing evidence here, explore relationship clusters in <strong className="text-cyan-300 font-normal">Fraud Networks</strong>.
+            </div>
+          </div>
+        </div>
+
         {/* Filters Toolbar */}
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
           <form onSubmit={handleSearchSubmit} className="flex items-center space-x-2 flex-1 max-w-md">

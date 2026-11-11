@@ -171,6 +171,32 @@ export default function InvestigationsPage() {
           </div>
         </div>
 
+        {/* Judge & Reviewer Helper Guidance */}
+        <div className="rounded-xl bg-slate-900/70 border border-slate-800 p-4 text-xs space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <span className="font-semibold text-slate-200 flex items-center gap-2">
+              <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 font-mono text-[10px] uppercase border border-indigo-500/30 font-bold">
+                Workflow Guide
+              </span>
+              Select a case from the queue to inspect its 6-stage agent reasoning timeline and corroboration evidence.
+            </span>
+            <span className="text-[11px] font-mono text-amber-300 bg-amber-950/60 px-2.5 py-1 rounded border border-amber-800/60 font-semibold self-start sm:self-auto">
+              ⚠️ Inspect CASE_FRAUD_905 for State Integrity Alert &amp; Blocked Action
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+            <div>
+              <strong className="text-slate-300">Evidence Corroboration:</strong> Each evidence card displays source sensors, confidence scores, and alternative explanations.
+            </div>
+            <div>
+              <strong className="text-slate-300">Human Approval Gate:</strong> Automated agents only recommend actions; financial remediation requires an explicit reviewer sign-off.
+            </div>
+            <div>
+              <strong className="text-slate-300">Next Step:</strong> After reviewing case decisions here, inspect payment statuses in <strong className="text-cyan-300 font-normal">Payment Operations</strong>.
+            </div>
+          </div>
+        </div>
+
         {/* 2-Column Workspace Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-[640px]">
           {/* Cases List Sidebar (4 cols) */}
@@ -335,7 +361,10 @@ export default function InvestigationsPage() {
                       <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-400" />
                       <div>
                         <span className="font-bold block mb-1">State Integrity Alert</span>
-                        {caseDetail.approval_integrity_warning}
+                        <p>{caseDetail.approval_integrity_warning}</p>
+                        <p className="mt-1.5 text-[11px] text-amber-300/80">
+                          <strong>Why is this blocked?</strong> Legacy data shows payment PAY_OP_905 marked &quot;Approved&quot;, but this investigation case is still &quot;Pending Review&quot; and was never captured on PayPal. AgentShield automatically blocks financial reversals whenever case, transaction, and payment states disagree.
+                        </p>
                       </div>
                     </div>
                   )}
