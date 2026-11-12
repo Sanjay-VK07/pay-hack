@@ -1,100 +1,159 @@
-# AgentShield — Evidence-Led FinTech Fraud Investigation Workbench
+# AgentShield
 
-AgentShield is an explainable payment fraud investigation workbench built for **PayPal Sandbox** transactions. It bridges the gap between raw fraud detection signals and high-stakes financial remediation by combining deterministic risk scoring, relationship-graph clustering, and an evidence-backed investigation dossier with an uncompromised **Human-in-the-Loop** approval gate.
+> **Autonomous FinTech Fraud Investigation Workbench with Human-in-the-Loop Governance for PayPal Sandbox**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?logo=fastapi)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-14.2-black?logo=next.js)](https://nextjs.org)
+[![PayPal](https://img.shields.io/badge/PayPal-Sandbox%20Orders%20v2-00457C?logo=paypal)](https://developer.paypal.com)
+[![NetworkX](https://img.shields.io/badge/NetworkX-Graph%20Clustering-orange)](https://networkx.org)
+
+AgentShield is an explainable fraud investigation platform built for payment operations teams handling PayPal transactions. It bridges the gap between raw fraud signals and high-stakes financial remediation by combining **deterministic heuristic risk scoring**, **relationship-graph syndicate analysis**, and **evidence-backed investigation dossiers**—all governed by a mandatory **Human-in-the-Loop approval gate** before any payment action can be authorized.
 
 ---
 
-## 1. What AgentShield Does
+## The Problem
 
-### The Problem
-In payment risk operations, automated fraud detection models often generate isolated, high-volume alerts without sufficient context or evidence. When organizations attempt to automate remediation end-to-end, autonomous systems risk triggering unauthorized refunds, customer churn, or erroneous dispute responses. Fraud analysts are left with fragmented signals, black-box scores, and zero visibility into connected syndicates.
+Traditional payment fraud detection presents two major operational failures:
+1. **Alert Fatigue & Context Fragmentation:** Fraud analysts receive thousands of isolated alerts with black-box risk scores, but lack the cross-account relationship maps and evidence trails needed to make rapid, defensible decisions.
+2. **The Danger of Unchecked Autonomous Remediation:** When autonomous agents or LLMs are granted direct access to payment gateways, hallucinations or adversarial inputs can trigger unauthorized refunds, unwarranted account freezes, and costly operational churn.
 
-### Intended User
-FinTech risk analysts, payment fraud operations teams, and compliance investigators reviewing suspicious digital transactions and coordinating payment defense.
+**AgentShield solves both:** it automates data enrichment, heuristic scoring, graph correlation, and dossier generation, while keeping financial execution strictly locked behind named human approval.
 
-### The End-to-End Workflow
+---
+
+## Architecture & Data Flow
+
 ```
-[ Incoming Transaction ]
-           │
-           ▼
-[ Deterministic Heuristic Engine + Isolation Forest Anomaly Signal ]
-           │
-           ▼
-[ NetworkX Syndicate Relationship Graph ] ──► (Cluster & Shared Entities)
-           │
-           ▼
-[ Multi-Agent Investigation Dossier ] ──► (Evidence Cards & Corroboration)
-           │
-           ▼
-[ Human Review Approval Gate ] ──► (Explicit Reviewer Sign-Off Required)
-           │
-           ▼
-[ Payment Settlement Safeguards ] ──► (PayPal Sandbox Verification & Blocking)
-           │
-           ▼
-[ Chronological Relational Audit Trail ]
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Transaction Ingestion                           │
+│     (Amounts, Cards, Device Fingerprints, IP / Geolocation, Merch)     │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                   Deterministic Risk & Anomaly Engine                  │
+│   • Mathematical Heuristics (Emulator, Proxy/VPN, Velocity, Carding)   │
+│   • scikit-learn Isolation Forest Unsupervised Anomaly Detection       │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                  NetworkX Relationship Graph Engine                    │
+│   • Multi-entity bipartite projection (Accounts, Devices, Cards, IPs)  │
+│   • Coordinated syndicate cluster discovery (Louvain & connected comps)│
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│               Autonomous Multi-Agent Investigation Pipeline            │
+│   1. Data Enrichment   2. Heuristic Analysis   3. Graph Intelligence   │
+│   4. Forensic Corroboration    5. Mitigation Planning                  │
+│   (Optional LLM Summarization: Gemini / OpenAI for narrative synthesis)│
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                   Human-in-the-Loop Review Gate                        │
+│   • Explicit reviewer sign-off required                                │
+│   • State integrity engine checks linked transaction/case consistency  │
+│   • Terminal state guards reject invalid or duplicate transitions     │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                   PayPal Sandbox Settlement Adapter                    │
+│   • Host confined strictly to https://api-m.sandbox.paypal.com         │
+│   • Verified OAuth 2.0 token exchange & Orders v2 creation            │
+│   • Reversals blocked on uncaptured payments (No settled funds)       │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                    Chronological Audit Ledger (SQLite)                 │
+│      Immutable timestamped tracking of all decisions and API events   │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. How It Works
+## Key Features
 
-### Deterministic Risk Scoring vs. Generative AI
-- **Decision Engine (100% Deterministic):** Risk scores (0–100) are generated by mathematical heuristics evaluating concrete indicators: Android/iOS emulator runtimes, anonymizing proxy/VPN IP exit nodes, hardware fingerprint sharing, rapid velocity checkout, and card-cloning indicators.
-- **Anomaly Detection:** An integrated `scikit-learn` Isolation Forest algorithm provides unsupervised anomaly scores alongside deterministic rules.
-- **Optional Generative AI:** Optional Gemini or OpenAI models can be configured to draft human-readable executive summaries from the evidence records. Generative AI **never** calculates risk scores, authorizes case approvals, or initiates payment actions.
-- **Evidence Traceability:** Every risk finding links directly to a structured evidence record with source sensor IDs, corroboration counts, observed values vs. baselines, and alternative explanations.
+### 1. 100% Explainable Deterministic Risk Scoring
+- Mathematical scoring on a 0–100 scale evaluating concrete risk indicators:
+  - **Runtime Environment:** Headless browsers, Android/iOS emulators (BlueStacks, Nox).
+  - **Network Identity:** Tor exit nodes, datacenter proxies, anonymizing VPN gateways.
+  - **Velocity & Behavioral Collisions:** Multi-account card reuse, rapid-checkout velocity.
+- Integrated `scikit-learn` Isolation Forest algorithm delivers unsupervised anomaly scores alongside deterministic heuristic weights.
+- **Evidence Traceability:** Every risk score maps to discrete evidence records containing source sensor IDs, baseline values, corroboration counts, and alternative explanations.
 
-### Graph-Derived Intelligence
-A `NetworkX` graph engine correlates transactions across customer accounts, persistent device fingerprints, and payment credential hashes. It groups suspicious actors into coordinated syndicate clusters (e.g. `CLUSTER_001`, `CLUSTER_002`), exposing multi-account velocity and card-cloning attacks that evade single-transaction analysis.
+### 2. Syndicate Graph Clustering (NetworkX)
+- Discovers organized carding rings and fraud networks by evaluating shared credentials across accounts.
+- Identifies identity collisions: accounts sharing the same physical device fingerprint, payment card hash, or IP subnet.
+- Renders interactive force-directed graph visualizations in React Flow with cluster isolation, node filtering, and 2-hop neighbor inspection.
 
-### Synthetic Demo Dataset
-The workbench ships with an illustrative demo dataset consisting of:
-- **30 transactions:** 10 high-risk anomalies, 20 legitimate baseline transactions.
-- **5 pre-configured investigation cases:** Complete with forensic dossiers, multi-stage reasoning timelines, and linked payment operations.
+### 3. Investigation Dossier Workspace
+- Synthesizes findings from a 6-stage autonomous agent pipeline into an audit-ready case file.
+- Corroborates facts across sensors, calculating corroboration confidence scores.
+- Optional Gemini or OpenAI integration can generate readable executive summaries, but generative models **never** calculate risk scores or authorize remediation.
+
+### 4. Human-in-the-Loop Governance & Safety Guards
+- **Approval Gate:** Automated agents can only recommend actions (e.g. `REFUND_TRANSACTION`, `LOCK_ACCOUNT`). Reversals cannot execute without explicit, named human approval.
+- **State Integrity Engine (`CASE_FRAUD_905`):** The engine cross-validates cases, transactions, and payment operations. In the demo dataset, `CASE_FRAUD_905` contains an uncaptured payment marked `APPROVED` while the case is `PENDING_REVIEW`. The system surfaces a prominent **State Integrity Alert** banner and blocks all financial actions automatically.
+- **Terminal State Protection:** Cases in terminal states (`ACTION_COMPLETED`, `CLOSED`, `REJECTED`) reject re-approval attempts with HTTP 400 and log `TRANSITION_REJECTED` in the audit ledger.
+
+### 5. PayPal Sandbox Integration
+- Connects exclusively to the official PayPal Sandbox API (`https://api-m.sandbox.paypal.com`).
+- Includes adapters for **Orders v2**, **Captures v2**, and **Refunds**.
+- Implements strict financial safety rules: uncaptured payments cannot be refunded because no settled funds exist.
 
 ---
 
-## 3. PayPal Sandbox Integration Status (Honest Disclosure)
+## PayPal Sandbox Verification Scope
 
-AgentShield connects exclusively to the **PayPal Sandbox API** (`https://api-m.sandbox.paypal.com`). Live credentials or production endpoints are never permitted.
+To ensure complete transparency during evaluation:
 
-| PayPal Stage | Status | Verification Evidence |
+| Component | Status | Details |
 | :--- | :--- | :--- |
-| **API Host Confinement** | **Verified** | Verified against `https://api-m.sandbox.paypal.com`. Live URLs trigger explicit configuration exceptions. |
-| **OAuth 2.0 Token Exchange** | **Verified** | Real token exchange against Sandbox via `POST /v1/oauth2/token`. |
-| **Sandbox Order Creation** | **Verified** | Live order created via `POST /v2/checkout/orders` &rarr; Order ID `3A365272FB586030R` (`PAY_4755283F3153`), status **`CREATED · Awaiting Buyer`**. |
-| **Buyer Approval** | **Unperformed / Unverified** | Requires a human buyer to log into the Sandbox checkout URL. This step has not been performed. |
-| **Order Capture** | **Safely Blocked** | Capture cannot be executed without buyer approval. |
-| **Refund Execution** | **Safely Blocked** | Uncaptured payments have no settled funds; refund requests are strictly rejected by server guards. |
-| **Pre-Seeded Demo Payments** | **Simulated** | Pre-seeded records (`PAY_OP_901`–`PAY_OP_906`) are local simulations, clearly labeled **`SIMULATED SANDBOX (DEMO)`** in the UI to prevent misunderstanding. |
+| **API Endpoint Host** | **Verified** | Verified against `https://api-m.sandbox.paypal.com`. Any attempt to configure live URLs raises an immediate configuration exception. |
+| **OAuth 2.0 Authentication** | **Verified** | Live token exchange via `POST /v1/oauth2/token` against Sandbox succeeds and issues valid bearer tokens. |
+| **Sandbox Order Creation** | **Verified** | Order `3A365272FB586030R` (`PAY_4755283F3153`) created live via PayPal Orders v2 API in `CREATED · Awaiting Buyer` status. |
+| **Buyer Approval** | **Unperformed** | Requires human buyer login at the PayPal checkout URL. Not executed during automated testing. |
+| **Order Capture** | **Safely Blocked** | Blocked server-side until buyer checkout is completed. |
+| **Refund Execution** | **Safely Blocked** | Uncaptured orders have no settled funds; refund endpoints safely reject uncaptured records. |
+| **Pre-Seeded Payments** | **Simulated** | Records `PAY_OP_901`–`PAY_OP_906` are synthetic local records clearly labeled `SIMULATED SANDBOX (DEMO)` in the UI. |
 
 ---
 
-## 4. What the Demo Proves & What It Does Not Prove
+## Tech Stack
 
-### What It Proves
-1. **Explainable Triage:** Translates raw transaction telemetry into deterministic, corroborated risk evidence.
-2. **Syndicate Visualization:** Detects multi-account fraud rings via graph relationship clustering.
-3. **Strict Human Governance:** AI agents recommend actions, but cannot move money without named human approval.
-4. **State Inconsistency Detection (`CASE_FRAUD_905`):** Legacy record `CASE_FRAUD_905` contains an uncaptured payment marked `APPROVED` while the case is `PENDING_REVIEW`. The application surfaces an amber **State Integrity Alert** banner and blocks all financial actions server-side.
-5. **Real Sandbox Order Creation:** Successfully initializes verified orders via PayPal Orders v2 API in `CREATED` status.
-
-### What It Does Not Prove
-- **Does NOT prove completed buyer checkout:** Buyer login at the PayPal checkout URL was not performed.
-- **Does NOT prove settled payment capture or refund:** Financial execution remains unverified and blocked.
-- **Does NOT prove blockchain immutability:** The audit trail is a relational SQLite table, not a tamper-proof distributed ledger.
+| Layer | Technologies |
+| :--- | :--- |
+| **Backend API** | FastAPI, Python 3.9+, Pydantic v2, uvicorn |
+| **Database & ORM** | SQLite, SQLAlchemy |
+| **Data Science & Graph** | NetworkX, scikit-learn (Isolation Forest), NumPy |
+| **Frontend Framework** | Next.js 14 (App Router), React 18, TypeScript |
+| **UI Components & Styling** | Tailwind CSS, Lucide React, Recharts |
+| **Interactive Graph** | React Flow (@xyflow/react) |
+| **Data Grid** | AG Grid (ag-grid-react, ag-grid-community) |
+| **Payment Integration** | PayPal Developer Platform (Sandbox Orders v2 / Captures v2 / Refunds) |
 
 ---
 
-## 5. Prerequisites & Local Setup
+## Quickstart & Local Setup
 
-### Requirements
-- **Python:** 3.9 or newer
-- **Node.js:** 18.0 or newer with `npm`
-- **Operating System:** macOS, Linux, or Windows (WSL recommended)
+### Prerequisites
+- Python 3.9 or higher
+- Node.js 18.x or higher with `npm`
 
-### Step 1: Backend Setup
+### 1. Clone & Configure
+```bash
+git clone https://github.com/Sanjay-VK07/pay-hack.git
+cd pay-hack
+```
+
+### 2. Backend Setup
 ```bash
 cd backend
 
@@ -105,149 +164,102 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Copy configuration template (safe placeholders)
+# Configure environment variables
 cp .env.example .env
 
-# Run FastAPI server
+# Start FastAPI server on loopback
 python -m app.main
 ```
-The backend initializes on `http://127.0.0.1:8000`. The interactive OpenAPI documentation is available at `http://127.0.0.1:8000/docs`.
+The backend initializes on `http://127.0.0.1:8000`. Interactive API documentation is available at `http://127.0.0.1:8000/docs`.
 
-### Step 2: Frontend Setup
+### 3. Frontend Setup
 In a new terminal window:
 ```bash
 cd frontend
 
-# Install Node dependencies
+# Install dependencies
 npm ci
 
-# Start Next.js development server (or run production build)
+# Start Next.js development server
 npm run dev
 ```
-The frontend is available at `http://localhost:3000`.
+Open `http://localhost:3000` in your browser.
 
-### Configuration Variables (`backend/.env`)
-Edit `backend/.env` with your own sandbox credentials or testing preferences. Placeholders from `.env.example`:
+---
 
-| Variable | Default Value | Description |
+## Environment Configuration
+
+Configuration is managed via `backend/.env`. Placeholders are documented in `backend/.env.example`:
+
+| Key | Default | Description |
 | :--- | :--- | :--- |
 | `API_HOST` | `127.0.0.1` | Loopback address for secure local execution. |
-| `PORT` | `8000` | Port for the backend FastAPI daemon. |
-| `DATABASE_URL` | `sqlite:///./agentshield.db` | Path to the local SQLite database. |
-| `PAYPAL_BASE_URL` | `https://api-m.sandbox.paypal.com` | **Sandbox only.** Never use live PayPal endpoints. |
-| `PAYPAL_CLIENT_ID` | `""` | PayPal Sandbox App Client ID. |
-| `PAYPAL_CLIENT_SECRET` | `""` | PayPal Sandbox App Secret. |
-| `AGENTSHIELD_API_KEY` | `""` | Optional key to protect mutating API endpoints outside loopback. |
-| `GEMINI_API_KEY` | `""` | Optional key for generative summary enrichment. |
-| `OPENAI_API_KEY` | `""` | Optional alternative for generative summary enrichment. |
+| `PORT` | `8000` | Port for the FastAPI server. |
+| `DATABASE_URL` | `sqlite:///./agentshield.db` | Local SQLite database file path. |
+| `PAYPAL_BASE_URL` | `https://api-m.sandbox.paypal.com` | **Sandbox only.** Live endpoints are rejected. |
+| `PAYPAL_CLIENT_ID` | `""` | PayPal Sandbox Developer App Client ID. |
+| `PAYPAL_CLIENT_SECRET` | `""` | PayPal Sandbox Developer App Secret. |
+| `AGENTSHIELD_API_KEY` | `""` | Optional key to protect mutating endpoints outside loopback. |
+| `GEMINI_API_KEY` | `""` | Optional key for narrative summary generation. |
+| `OPENAI_API_KEY` | `""` | Optional alternative for narrative summary generation. |
 
-> [!WARNING]
-> Keep `backend/.env` out of source control. Never commit live or sandbox client secrets.
+> **Note:** Do not commit `.env` to version control. The repository `.gitignore` automatically excludes all environment files, local databases, and credentials.
 
 ---
 
-## 6. Verified Demo Walkthrough & App Routes
+## Application Workspaces & Routes
 
-For the step-by-step video script, refer to [DEMO_SCRIPT.md](DEMO_SCRIPT.md).
-
-| Route | Page Name | What the Presenter Shows |
+| URL | Workspace | Description |
 | :--- | :--- | :--- |
-| `http://localhost:3000/dashboard` | **Dashboard** | Overview KPI cards (30 Analyzed, 10 Anomalies, 5 Cases, 2 Fraud Rings) and risk distributions. |
-| `http://localhost:3000/transactions` | **Transactions** | AG Grid ledger with deterministic scores. Click `TXN_FRAUD_901` ($2,450.00 USD, Critical) to open the forensic drawer showing emulator, proxy IP, and device sharing indicators. |
-| `http://localhost:3000/fraud-networks` | **Fraud Networks** | Interactive React Flow relationship graph. Select `CLUSTER_001` or node `TXN_FRAUD_901` to view multi-account collisions. |
-| `http://localhost:3000/investigations` | **Investigation Workspace** | Open `CASE_FRAUD_901` to show the multi-agent reasoning timeline, corroboration evidence cards, and the Human Review Gate. Next, select `CASE_FRAUD_905` to show the amber **State Integrity Alert** banner and disabled action buttons. |
-| `http://localhost:3000/payments` | **Payment Operations** | Point to `PAY_4755283F3153` highlighted as **`LIVE PAYPAL SANDBOX`** with status **`CREATED · Awaiting Buyer`**. Contrast with simulated records labeled **`SIMULATED SANDBOX (DEMO)`**. Point out `PAY_OP_905` marked **`State Mismatch (Blocked)`**. |
-| `http://localhost:3000/audit` | **Audit Center** | Chronological audit ledger recording `PAYPAL_ORDER_CREATED`, `HUMAN_APPROVAL_GRANTED`, and `TRANSITION_REJECTED` events. |
-| `http://localhost:3000/settings` | **Settings** | Health checks confirming `paypal_oauth_status: AUTHENTICATED` and `integration_mode: LIVE_PAYPAL_SANDBOX`. |
+| [`/dashboard`](http://localhost:3000/dashboard) | **Command Center** | Live telemetry, KPI metrics, risk distributions, and a 4-step Judge Quickstart guide. |
+| [`/transactions`](http://localhost:3000/transactions) | **Transactions** | AG Grid ledger with deterministic scores. Click any transaction (e.g. `TXN_FRAUD_901`) to open the forensic intelligence drawer. |
+| [`/fraud-networks`](http://localhost:3000/fraud-networks) | **Fraud Networks** | Interactive React Flow relationship graph visualizing shared cards, devices, and syndicate rings. |
+| [`/investigations`](http://localhost:3000/investigations) | **Investigation Workspace** | Multi-agent reasoning timelines, evidence corroboration cards, human review gates, and the `CASE_FRAUD_905` state integrity alert. |
+| [`/payments`](http://localhost:3000/payments) | **Payment Operations** | Payment ledger clearly distinguishing live Sandbox orders (`PAY_4755283F3153`) from simulated demo records. |
+| [`/audit`](http://localhost:3000/audit) | **Audit Center** | Chronological relational audit log tracking approvals, order creations, and transition rejections. |
+| [`/settings`](http://localhost:3000/settings) | **Settings & Health** | PayPal Sandbox OAuth connectivity diagnostics and system health indicators. |
 
 ---
 
-## 7. Safe Automated Testing & Builds
+## Safe Testing
 
-### Backend Testing (Isolated Temporary Database)
-Our test suite uses an import-time fixture that copies database state into a temporary database (`/tmp/test_agentshield_*.db`). Automated tests **never** write to, mutate, or delete records in the real `backend/agentshield.db` database.
+AgentShield includes an automated test suite designed with **strict database isolation**. Tests use a fixture that copies the database into `/tmp/test_agentshield_*.db` at import time, ensuring that running tests **never** modifies, seeds, or deletes records from the primary `backend/agentshield.db` database.
 
-Run the focused test suite from `backend/`:
+### Run Isolated Backend Tests
 ```bash
+cd backend
 venv/bin/python -m pytest -q \
   app/tests/test_live_system_verification.py \
   app/tests/test_safe_paypal_adapter.py \
   app/tests/test_safeguards_and_auth.py
 ```
-*Expected Result:* `19 passed, 0 failed in ~0.30s`.
+*Expected output:* `19 passed, 0 failed in ~0.30s`.
 
-### Frontend Build
-Verify that the Next.js frontend compiles cleanly:
+### Run Frontend Production Build
 ```bash
 cd frontend
 npm run build
 ```
-*Expected Result:* `Compiled successfully`, 0 TypeScript errors, 12 static pages generated.
+*Expected output:* `Compiled successfully`, 0 TypeScript errors, 12 static pages generated.
 
 ---
 
-## 8. Security Architecture & Limitations
+## Security Architecture
 
-1. **Mutation Authentication Guard:** All 14 mutating endpoints (`POST /api/investigations/*`, `POST /api/payments/*`, `POST /api/transactions/*`, `POST /api/demo/*`) enforce authentication via `X-AgentShield-Key` or `Authorization: Bearer <key>` when `AGENTSHIELD_API_KEY` is configured.
-2. **Loopback Confinement:** By default, mutations without an API key are permitted only from loopback addresses (`127.0.0.1`, `::1`) for frictionless local evaluation. Remote callers receive HTTP `403 Forbidden`.
-3. **Read-Only Demo Access:** All query endpoints (`GET /api/*`) remain unauthenticated so judges can inspect all screens without entering credentials.
-4. **Relational Audit Ledger:** The audit log is a standard SQLite relational table. While transitions are audited chronologically, it is not a cryptographically signed blockchain ledger.
-5. **Investigator Identity:** Reviewer names entered during approval are self-reported for local demo workflow convenience and are not tied to a SAML/OAuth enterprise IdP.
-6. **Production Readiness:** This codebase is an evaluation prototype designed for hackathon demonstration. It is not hardened for production financial environments.
+1. **Mutation Authentication Guard:** All 14 mutating API routes (`POST /api/investigations/*`, `POST /api/payments/*`, `POST /api/transactions/*`, `POST /api/demo/*`) enforce authentication via `X-AgentShield-Key` or `Authorization: Bearer <key>` when `AGENTSHIELD_API_KEY` is configured.
+2. **Loopback Confinement:** By default, mutations without an API key are restricted to loopback addresses (`127.0.0.1`, `::1`) for frictionless local evaluation. Remote callers receive HTTP 403 Forbidden.
+3. **Read-Only Demonstration Access:** Query endpoints (`GET /api/*`) remain open so evaluators can inspect telemetry and dossiers without authentication barriers.
+4. **Relational Audit Trail:** All case approvals, rejections, order creations, and transition attempts are recorded chronologically in a dedicated relational audit table.
 
 ---
 
-## 9. Repository & License Details
+## Submission & Demo Documentation
 
-- **License:** Open source under the [MIT License](LICENSE).
-- **GitHub Repository:** `https://github.com/Sanjay-VK07/pay-hack.git`
-- **Submission Track:** PayPal AI Developer Hackathon.
+- **[DEMO_SCRIPT.md](DEMO_SCRIPT.md):** Complete time-coded (2:40 target) walkthrough script for video recording.
+- **[SUBMISSION_DRAFT.md](SUBMISSION_DRAFT.md):** Complete hackathon submission copy, architectural breakdown, and disclosure notes.
 
 ---
 
-## 10. For the Presenter (Demo Video Guide)
+## License
 
-Use this guide when recording your 3-minute video walkthrough.
-
-### Video Target Duration
-**2:35–2:50** (Strictly under 3:00).
-
-### Recommended Screen Order & Talking Points
-
-#### Step 1: 0:00–0:22 — The Problem & Overview (`/dashboard`)
-- **Show:** The Dashboard with KPI cards and risk breakdown.
-- **Narration:** *"When payment fraud strikes, risk operations teams don't just need another alert—they need context, evidence, and clear boundaries on remediation. Fully autonomous systems that trigger refunds without human oversight create massive operational risk. AgentShield is an explainable payment fraud workbench built for PayPal Sandbox. It combines deterministic risk scoring, relationship-graph clustering, and an evidence-backed dossier to give investigators total clarity before any payment action is authorized."*
-
-#### Step 2: 0:22–0:52 — Transaction Triage & Heuristic Scoring (`/transactions`)
-- **Show:** Click `TXN_FRAUD_901` ($2,450.00 USD, Critical). Open the forensic slide drawer.
-- **Narration:** *"On the Transactions ledger, incoming payments are evaluated in real time. Rather than relying on a black-box LLM, AgentShield uses a deterministic heuristic engine coupled with an Isolation Forest anomaly detector. For transaction 901, the system flags an Android emulator runtime, an anonymizing proxy exit node, and a shared device fingerprint with 100% mathematical explainability."*
-
-#### Step 3: 0:52–1:25 — Syndicate Graph Intelligence (`/fraud-networks`)
-- **Show:** Select `CLUSTER_001` or node `TXN_FRAUD_901`. Click `Fit Screen` and show connected entities.
-- **Narration:** *"Single transactions often conceal organized rings. AgentShield's relationship graph maps connected entities across accounts, devices, and payment credentials using NetworkX. Reviewers can visually trace credential stuffing and multi-account velocity collisions, inspecting underlying evidence IDs directly instead of guessing why a cluster was flagged."*
-
-#### Step 4: 1:25–2:00 — Investigation Dossier & Human Approval Gate (`/investigations`)
-- **Show:** Open `CASE_FRAUD_901`. Scroll through the Autonomous Agent Reasoning Timeline. Highlight the Human Review Gate. Next, click `CASE_FRAUD_905` to highlight the amber State Integrity Alert banner.
-- **Narration:** *"In the Investigation Workspace, multi-agent findings are synthesized into an audit-ready dossier. Crucially, AgentShield enforces a strict Human-in-the-Loop approval gate: automated agents can recommend remediation, but cannot execute financial actions without an explicit, named reviewer sign-off. On legacy case 905, our integrity engine detects a pre-existing state conflict and blocks all financial actions automatically."*
-
-#### Step 5: 2:00–2:35 — PayPal Sandbox Integration & Settlement Safeguards (`/payments`)
-- **Show:** Scroll through the Payment Operations table. Point to `PAY_4755283F3153` labeled `LIVE PAYPAL SANDBOX` with status `CREATED · Awaiting Buyer`. Point to simulated demo records. Point to `PAY_OP_905` marked `Ineligible (No Capture)` and `State Mismatch (Blocked)`.
-- **Narration:** *"In Payment Operations, we clearly separate simulated demo data from real PayPal Sandbox operations. Pre-seeded records are explicitly tagged as local simulations. Meanwhile, order PAY_4755283F3153 was created live via PayPal Sandbox Orders v2 API in 'Created — Awaiting Buyer' status. To remain truthful to judges: buyer checkout, capture, and refund remain unperformed and unverified in this demo. Uncaptured payments have no settled funds, and the server strictly blocks refund execution."*
-
-#### Step 6: 2:35–2:55 — Audit Trail & Closing (`/audit`)
-- **Show:** Scroll through the chronological audit ledger showing `PAYPAL_ORDER_CREATED`, `HUMAN_APPROVAL_GRANTED`, and `TRANSITION_REJECTED` events.
-- **Narration:** *"Every case decision, order creation, and transition rejection is recorded in our chronological audit ledger. AgentShield delivers speed, explainability, and governance—keeping human reviewers firmly in control of payment security."*
-
-### Pitfalls to Avoid
-- ⛔ **Do not claim buyer approval, capture, or refund works:** State clearly that order creation was verified and that buyer approval and capture remain unperformed.
-- ⛔ **Do not present simulated payments as PayPal transactions:** The pre-seeded payments are local simulations.
-- ⛔ **Do not expose secret values:** Ensure `.env`, API keys, client secrets, and full checkout URLs are never visible on screen.
-- ⛔ **Do not click mutating demo buttons during recording:** Keep the presentation strictly read-only so existing demo rows remain pristine.
-
-### Pre-Recording Checklist
-- [ ] Backend is running on `http://127.0.0.1:8000` (FastAPI).
-- [ ] Frontend is running on `http://localhost:3000` (Next.js).
-- [ ] Browser zoom is set to 100% or 110% for optimal readability on laptop screens.
-- [ ] Tab order prepared: Dashboard &rarr; Transactions &rarr; Fraud Networks &rarr; Investigations &rarr; Payments &rarr; Audit.
-- [ ] Audio input checked for clear voiceover with zero background noise.
-- [ ] Video duration is timed under 3 minutes (target: 2:40).
+This project is open-source software licensed under the [MIT License](LICENSE).
